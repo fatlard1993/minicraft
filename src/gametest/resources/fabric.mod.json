@@ -1,0 +1,19 @@
+{
+	"schemaVersion": 1,
+	"id": "minicraft-gametest",
+	"version": "1.0.0",
+	"name": "Minicraft game tests",
+	"description": "Runs the bench's whole loop through the server's own paths.",
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-client-gametest": [
+			"justfatlard.minicraft.gametest.BenchLoop",
+			"justfatlard.minicraft.gametest.Behaviours"
+		]
+	},
+	"depends": {
+		"minicraft-justfatlard": "*",
+		"fabric-client-gametest-api-v1": "*"
+	}
+}

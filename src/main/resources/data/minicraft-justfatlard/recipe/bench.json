@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " A ",
+    "PTP",
+    "PPP"
+  ],
+  "key": {
+    "A": "minecraft:amethyst_shard",
+    "T": "minecraft:crafting_table",
+    "P": "#minecraft:planks"
+  },
+  "result": { "id": "minicraft-justfatlard:bench", "count": 1 }
+}

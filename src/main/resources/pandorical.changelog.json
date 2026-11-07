@@ -1,0 +1,10 @@
+{
+	"overview": [
+		"Build at full size, keep it as one block."
+	],
+	"versions": {
+		"0.1.0": [
+			"A bench that shrinks what you build into one block."
+		]
+	}
+}

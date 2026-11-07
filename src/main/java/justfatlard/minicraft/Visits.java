@@ -1,0 +1,368 @@
+package justfatlard.minicraft;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Relative;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Going into the workshop and coming out, and what holds while a builder is there.
+ *
+ * <p>In there a builder is in survival, not creative: creative's inventory is endless, and the
+ * whole point is building with what was loaded. They fly, blocks come away at a touch, they reach
+ * a little further, and their pack holds their materials: one stack per material, each a window
+ * onto that material's budget, topped up from it as it is spent. The budget is the record, never
+ * the pack; the pack is emptied on the way out and what they came in with is put back.
+ */
+public final class Visits {
+	private Visits() {}
+
+	/** Where the way out sits in the hotbar, and the stick that marks a handle beside it. */
+	private static final int LEAVE_SLOT = 8;
+	private static final int MARK_SLOT = 7;
+	/** The pack's main slots: hotbar and the three rows above it. */
+	private static final int PACK = Inventory.INVENTORY_SIZE;
+
+	private static final Identifier FAST_HANDS = Identifier.fromNamespaceAndPath(Main.MOD_ID, "fast_hands");
+	private static final Identifier LONG_ARMS = Identifier.fromNamespaceAndPath(Main.MOD_ID, "long_arms");
+	private static final String LEAVE_MARK = "minicraft_leave";
+	private static final String HANDLE_MARK = "minicraft_handle_marker";
+
+	// --- In and out ---
+
+	/** Take this player into the plot's box. Says why not and returns false if they cannot go. */
+	public static boolean enter(ServerPlayer player, int plot) {
+		MinecraftServer server = player.level().getServer();
+		Ledger ledger = Ledger.get(server);
+		Ledger.Project project = ledger.project(plot);
+		ServerLevel workshop = Workshop.level(server);
+		if (project == null || workshop == null || player.isSpectator()) return false;
+		if (project.n() == 0) return tell(player, "minicraft-justfatlard.enter.no_size", "Choose a size first.");
+		if (Session.of(player) != null) return tell(player, "minicraft-justfatlard.enter.already", "You are already in a workshop.");
+		if (project.capturing() || project.occupant() != null && !project.occupant().equals(player.getUUID())) {
+			return tell(player, "minicraft-justfatlard.enter.busy", "Somebody is building at this bench.");
+		}
+
+		player.stopRiding();
+		Session.set(player, new Session(plot, Session.Home.of(player), Session.stashOf(player),
+			player.gameMode().getName(), player.getAbilities().mayfly));
+		ledger.occupy(plot, player.getUUID());
+
+		player.getInventory().clearContent();
+		player.removeAllEffects();
+		if (player.gameMode() != GameType.SURVIVAL) player.setGameMode(GameType.SURVIVAL);
+
+		Workshop.prepare(workshop, plot, project.n());
+		Vec3 arrival = Workshop.arrival(plot, project.n());
+		player.teleportTo(workshop, arrival.x, arrival.y, arrival.z, Set.<Relative>of(), 180F, 20F, true);
+		equip(player);
+		player.getAbilities().flying = true;
+		player.onUpdateAbilities();
+		refreshPack(player);
+		workshop.playSound(null, arrival.x, arrival.y, arrival.z, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.0F, 1.2F);
+		return true;
+	}
+
+	/** Back to exactly where they stood, with exactly what they carried. */
+	public static void leave(ServerPlayer player) {
+		Session session = Session.of(player);
+		if (session == null) return;
+		MinecraftServer server = player.level().getServer();
+		Session.Home home = session.home();
+		ServerLevel there = server.getLevel(home.dimension());
+		if (there != null) {
+			player.teleportTo(there, home.x(), home.y(), home.z(), Set.<Relative>of(), home.yaw(), home.pitch(), true);
+		} else {
+			// The world they came from is gone. Spawn always exists, and beats a sealed workshop.
+			ServerLevel overworld = server.overworld();
+			BlockPos spawn = overworld.getRespawnData().pos();
+			player.teleportTo(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, Set.<Relative>of(), 0F, 0F, true);
+		}
+		finish(player, session);
+	}
+
+	/** Everything about being in the workshop undone, wherever the player now is. */
+	static void finish(ServerPlayer player, Session session) {
+		Ledger ledger = Ledger.get(player.level().getServer());
+		Ledger.Project project = ledger.project(session.plot());
+		if (project != null && player.getUUID().equals(project.occupant())) ledger.occupy(session.plot(), null);
+
+		Inventory inventory = player.getInventory();
+		inventory.clearContent();
+		for (Session.Slot slot : session.stash()) {
+			ItemStack stack = slot.stack().copy();
+			if (slot.slot() >= 0 && slot.slot() < inventory.getContainerSize() && inventory.getItem(slot.slot()).isEmpty()) {
+				inventory.setItem(slot.slot(), stack);
+			} else if (!inventory.add(stack)) {
+				player.drop(stack, false, net.minecraft.util.Prediction.SERVER_ONLY);
+			}
+		}
+
+		GameType before = GameType.byName(session.gameMode(), GameType.SURVIVAL);
+		if (player.gameMode() != before) player.setGameMode(before);
+		if (!player.gameMode().isCreative() && !player.isSpectator()) {
+			player.getAbilities().mayfly = session.mayFly();
+			if (!session.mayFly()) player.getAbilities().flying = false;
+			player.onUpdateAbilities();
+		}
+		unequip(player);
+		Session.set(player, null);
+		player.containerMenu.broadcastChanges();
+	}
+
+	// --- While there ---
+
+	/** Flight allowed, quick hands, long arms. Kept up once a second, so it never lapses; flying itself is the builder's to switch. */
+	private static void equip(ServerPlayer player) {
+		if (!player.getAbilities().mayfly) {
+			player.getAbilities().mayfly = true;
+			player.onUpdateAbilities();
+		}
+		modify(player.getAttribute(Attributes.BLOCK_BREAK_SPEED), FAST_HANDS, 1023);
+		modify(player.getAttribute(Attributes.BLOCK_INTERACTION_RANGE), LONG_ARMS, 4);
+	}
+
+	private static void unequip(ServerPlayer player) {
+		AttributeInstance speed = player.getAttribute(Attributes.BLOCK_BREAK_SPEED);
+		if (speed != null) speed.removeModifier(FAST_HANDS);
+		AttributeInstance range = player.getAttribute(Attributes.BLOCK_INTERACTION_RANGE);
+		if (range != null) range.removeModifier(LONG_ARMS);
+	}
+
+	private static void modify(AttributeInstance attribute, Identifier id, double amount) {
+		if (attribute != null && !attribute.hasModifier(id)) {
+			attribute.addTransientModifier(new AttributeModifier(id, amount, AttributeModifier.Operation.ADD_VALUE));
+		}
+	}
+
+	/**
+	 * Lay the pack out to match the budget: every material a stack, as full as the budget allows,
+	 * in the slot the builder left it in; anything that is not a material gone; the way out in its
+	 * slot.
+	 */
+	public static void refreshPack(ServerPlayer player) {
+		Session session = Session.of(player);
+		if (session == null) return;
+		Ledger.Project project = Ledger.get(player.level().getServer()).project(session.plot());
+		if (project == null) return;
+		Inventory inventory = player.getInventory();
+		List<Item> materials = project.materials();
+		Set<Item> shown = new HashSet<>();
+
+		for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+			ItemStack stack = inventory.getItem(slot);
+			if (slot == LEAVE_SLOT) {
+				if (!isLeave(stack)) inventory.setItem(slot, leaveItem());
+				continue;
+			}
+			if (slot == MARK_SLOT) {
+				if (!isMarker(stack)) inventory.setItem(slot, markerItem());
+				continue;
+			}
+			if (stack.isEmpty()) continue;
+			Item item = stack.getItem();
+			if (slot < PACK && materials.contains(item) && shown.add(item)) {
+				int want = (int) Math.min(project.cells(item), stack.getMaxStackSize());
+				if (stack.getCount() != want || !stack.getComponentsPatch().isEmpty()) inventory.setItem(slot, new ItemStack(item, want));
+			} else {
+				inventory.setItem(slot, ItemStack.EMPTY);
+			}
+		}
+		for (Item item : materials) {
+			if (shown.contains(item)) continue;
+			for (int slot = 0; slot < PACK; slot++) {
+				if (slot == LEAVE_SLOT || slot == MARK_SLOT || !inventory.getItem(slot).isEmpty()) continue;
+				ItemStack stack = new ItemStack(item);
+				stack.setCount((int) Math.min(project.cells(item), stack.getMaxStackSize()));
+				inventory.setItem(slot, stack);
+				break;
+			}
+		}
+		player.containerMenu.broadcastChanges();
+	}
+
+	static ItemStack leaveItem() {
+		ItemStack stack = new ItemStack(Items.ENDER_EYE);
+		CompoundTag mark = new CompoundTag();
+		mark.putBoolean(LEAVE_MARK, true);
+		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(mark));
+		stack.set(DataComponents.CUSTOM_NAME, Component.translatableWithFallback("minicraft-justfatlard.leave", "Back to the bench"));
+		stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
+		return stack;
+	}
+
+	public static boolean isLeave(ItemStack stack) {
+		return marked(stack, LEAVE_MARK);
+	}
+
+	static ItemStack markerItem() {
+		ItemStack stack = new ItemStack(Items.STICK);
+		CompoundTag mark = new CompoundTag();
+		mark.putBoolean(HANDLE_MARK, true);
+		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(mark));
+		stack.set(DataComponents.CUSTOM_NAME, Component.translatableWithFallback("minicraft-justfatlard.marker", "Mark the handle"));
+		return stack;
+	}
+
+	public static boolean isMarker(ItemStack stack) {
+		return marked(stack, HANDLE_MARK);
+	}
+
+	private static boolean marked(ItemStack stack, String key) {
+		CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+		return data != null && data.copyTag().getBooleanOr(key, false);
+	}
+
+	/**
+	 * The stick on a block in the box: that block is the handle, worked when the miniature is
+	 * right-clicked. On the handle again, there is no handle.
+	 */
+	public static void markHandle(ServerPlayer player, BlockPos pos) {
+		Session session = Session.of(player);
+		if (session == null) return;
+		Ledger ledger = Ledger.get(player.level().getServer());
+		Ledger.Project project = ledger.project(session.plot());
+		if (project == null || !Workshop.inBox(pos, session.plot(), project.n()) || player.level().getBlockState(pos).isAir()) return;
+		BlockPos cell = pos.subtract(Workshop.origin(session.plot()));
+		if (cell.equals(project.handle())) {
+			ledger.setHandle(session.plot(), null);
+			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.handle.cleared", "No handle."));
+		} else {
+			ledger.setHandle(session.plot(), cell);
+			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.handle.set",
+				"The %s is the handle.", player.level().getBlockState(pos).getBlock().getName()));
+		}
+	}
+
+	/** How many of its item a block stands for when it is broken: two slabs in a double slab, four candles in a cluster. */
+	static int blocksIn(BlockState state) {
+		if (state.hasProperty(SlabBlock.TYPE) && state.getValue(SlabBlock.TYPE) == SlabType.DOUBLE) return 2;
+		for (IntegerProperty counted : List.of(BlockStateProperties.LAYERS, BlockStateProperties.CANDLES,
+				BlockStateProperties.PICKLES, BlockStateProperties.EGGS, BlockStateProperties.FLOWER_AMOUNT,
+				BlockStateProperties.SEGMENT_AMOUNT)) {
+			if (state.hasProperty(counted)) return state.getValue(counted);
+		}
+		return 1;
+	}
+
+	/** A block broken in the box goes back into the budget as the item it is made from. */
+	public static void broke(ServerPlayer player, BlockPos pos, BlockState state) {
+		Session session = Session.of(player);
+		if (session == null) return;
+		Ledger ledger = Ledger.get(player.level().getServer());
+		Ledger.Project project = ledger.project(session.plot());
+		if (project == null || !Workshop.inBox(pos, session.plot(), project.n())) return;
+		Item item = state.getBlock().asItem();
+		if (item == Items.AIR) return;
+		ledger.change(session.plot(), item, blocksIn(state));
+		refreshPack(player);
+	}
+
+	/** A block placed in the box comes out of the budget. */
+	public static void placed(ServerPlayer player, Item item) {
+		Session session = Session.of(player);
+		if (session == null) return;
+		Ledger.get(player.level().getServer()).change(session.plot(), item, -1);
+		refreshPack(player);
+	}
+
+	/** Whether this player may put a block of this item at this spot: in their box, with some of it left. */
+	public static boolean mayPlace(ServerPlayer player, BlockPos pos, Item item) {
+		Session session = Session.of(player);
+		if (session == null) return player.isCreative();
+		Ledger.Project project = Ledger.get(player.level().getServer()).project(session.plot());
+		return project != null && Workshop.inBox(pos, session.plot(), project.n()) && project.cells(item) > 0;
+	}
+
+	/**
+	 * Twice a second for everyone in the workshop: back inside the bounds if they have strayed,
+	 * home if they have no business there, and once a second the pack set straight, flight kept
+	 * on, and the box's edges drawn for them.
+	 */
+	public static void watch(MinecraftServer server) {
+		ServerLevel workshop = Workshop.level(server);
+		if (workshop == null || server.getTickCount() % 10 != 0) return;
+		boolean everySecond = server.getTickCount() % 20 == 0;
+		Ledger ledger = Ledger.get(server);
+		for (ServerPlayer player : List.copyOf(workshop.players())) {
+			Session session = Session.of(player);
+			if (session == null) {
+				if (!player.isCreative() && !player.isSpectator()) {
+					ServerLevel overworld = server.overworld();
+					BlockPos spawn = overworld.getRespawnData().pos();
+					player.teleportTo(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, Set.<Relative>of(), 0F, 0F, true);
+				}
+				continue;
+			}
+			Ledger.Project project = ledger.project(session.plot());
+			if (project == null || project.n() == 0) {
+				leave(player);
+				continue;
+			}
+			AABB bounds = Workshop.bounds(session.plot(), project.n());
+			if (!bounds.contains(player.position())) {
+				Vec3 arrival = Workshop.arrival(session.plot(), project.n());
+				player.teleportTo(workshop, arrival.x, arrival.y, arrival.z, Set.<Relative>of(), player.getYRot(), player.getXRot(), false);
+			}
+			if (!everySecond) continue;
+			if (player.gameMode() != GameType.SURVIVAL) player.setGameMode(GameType.SURVIVAL);
+			equip(player);
+			refreshPack(player);
+			outline(workshop, player, session.plot(), project.n());
+		}
+	}
+
+	/** The box's twelve edges, a mote a block, for this builder alone. */
+	private static void outline(ServerLevel level, ServerPlayer player, int plot, int n) {
+		BlockPos min = Workshop.origin(plot);
+		BlockPos handle = Ledger.get(level.getServer()).project(plot).handle();
+		if (handle != null) {
+			BlockPos at = min.offset(handle);
+			level.sendParticles(player, ParticleTypes.HAPPY_VILLAGER, false, false, at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5, 4, 0.3, 0.3, 0.3, 0);
+		}
+		for (int i = 0; i <= n; i++) {
+			for (int a = 0; a <= 1; a++) for (int b = 0; b <= 1; b++) {
+				mote(level, player, min.getX() + i, min.getY() + a * n, min.getZ() + b * n);
+				mote(level, player, min.getX() + a * n, min.getY() + i, min.getZ() + b * n);
+				mote(level, player, min.getX() + a * n, min.getY() + b * n, min.getZ() + i);
+			}
+		}
+	}
+
+	private static void mote(ServerLevel level, ServerPlayer player, double x, double y, double z) {
+		level.sendParticles(player, ParticleTypes.END_ROD, false, false, x, y, z, 1, 0, 0, 0, 0);
+	}
+
+	private static boolean tell(ServerPlayer player, String key, String fallback) {
+		player.sendOverlayMessage(Component.translatableWithFallback(key, fallback));
+		return false;
+	}
+}
