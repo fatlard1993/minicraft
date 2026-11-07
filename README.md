@@ -2,6 +2,10 @@
 
 Build at full size, keep it as one block.
 
+## Screenshots
+
+![A Miniature Bench beside four miniature cottages, one block each, turned the four ways they were placed](screenshot.png)
+
 A Miniature Bench cuts a block into 2 to 16 pieces a side. Load it with blocks, step into a box of your own in the workshop, and build there at full size with exactly what you loaded. Finish, and the build comes out as one block: a miniature, the whole build at a fraction of the size, solid where it is solid, ready to place.
 
 ## The Bench
