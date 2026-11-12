@@ -36,6 +36,7 @@ Chosen on the bench before finishing, and tried out on the full-size build as it
 - **Blocks that hold things** cannot be loaded, except an empty chest or barrel; a chest built into the box stays shut while you build.
 - **TNT** cannot be loaded.
 - **Nothing in the workshop moves material on its own.** Nothing ever drops there, nothing grows or melts, and the box's floor cannot be broken.
+- **No stepping in from a PvP Dimensions arena or the Learning Blocks classroom.** Each of those keeps your own things aside the way the workshop does, and the two would hand back each other's. A bench there says "Not from here: leave this world first"; step out to the ordinary world and the bench takes you in.
 
 ## Known Limits
 

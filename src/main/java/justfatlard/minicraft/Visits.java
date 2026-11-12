@@ -58,6 +58,14 @@ public final class Visits {
 
 	// --- In and out ---
 
+	/**
+	 * Worlds whose mod holds the player's own things the way the workshop does: a PvP Dimensions arena,
+	 * the Learning Blocks classroom. Stepping in from one would put that mod's pack aside here as theirs,
+	 * while crossing out of its world made it hand the real one back in the workshop; coming back, the
+	 * other mod's pack would come home as theirs. So the bench there takes nobody in.
+	 */
+	private static final java.util.Set<String> HELD_ELSEWHERE = java.util.Set.of("pvp-dimensions-justfatlard", "learning-blocks-justfatlard");
+
 	/** Take this player into the plot's box. Says why not and returns false if they cannot go. */
 	public static boolean enter(ServerPlayer player, int plot) {
 		MinecraftServer server = player.level().getServer();
@@ -67,6 +75,9 @@ public final class Visits {
 		if (project == null || workshop == null || player.isSpectator()) return false;
 		if (project.n() == 0) return tell(player, "minicraft-justfatlard.enter.no_size", "Choose a size first.");
 		if (Session.of(player) != null) return tell(player, "minicraft-justfatlard.enter.already", "You are already in a workshop.");
+		if (HELD_ELSEWHERE.contains(player.level().dimension().identifier().getNamespace())) {
+			return tell(player, "minicraft-justfatlard.enter.held", "Not from here: leave this world first.");
+		}
 		if (project.capturing() || project.occupant() != null && !project.occupant().equals(player.getUUID())) {
 			return tell(player, "minicraft-justfatlard.enter.busy", "Somebody is building at this bench.");
 		}

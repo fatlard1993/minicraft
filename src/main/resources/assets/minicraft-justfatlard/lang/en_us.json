@@ -2,5 +2,6 @@
   "block.minicraft-justfatlard.bench": "Miniature Bench",
   "block.minicraft-justfatlard.miniature": "Miniature",
   "minicraft-justfatlard.leave": "Back to the bench",
-  "minicraft-justfatlard.marker": "Mark the handle"
+  "minicraft-justfatlard.marker": "Mark the handle",
+  "minicraft-justfatlard.enter.held": "Not from here: leave this world first."
 }
