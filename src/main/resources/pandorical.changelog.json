@@ -3,6 +3,9 @@
 		"Build at full size, keep it as one block."
 	],
 	"versions": {
+		"0.1.1": [
+			"No stepping into the workshop from a PvP Dimensions arena or the Learning Blocks classroom."
+		],
 		"0.1.0": [
 			"A bench that shrinks what you build into one block."
 		]
