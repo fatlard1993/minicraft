@@ -92,7 +92,7 @@ public class Main implements ModInitializer {
 
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> {
 			if (blockEntity instanceof BenchBlockEntity && Bench.occupied(level, pos)) {
-				if (player instanceof ServerPlayer told) Bench.say(told, "minicraft-justfatlard.busy", "Somebody is building at this bench.");
+				if (player instanceof ServerPlayer told) Bench.tellBusy(told, level, pos);
 				return false;
 			}
 			if (!(level instanceof ServerLevel server) || !Workshop.isWorkshop(server)) return true;

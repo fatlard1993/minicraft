@@ -67,6 +67,8 @@ import java.util.UUID;
  * mostly made of, a slab half a block high, and copying one at the bench.
  */
 public final class Behaviours implements FabricClientGameTest {
+	/** A builder counted inside a box while not on the server: still inside, as one who logged out in the box is. */
+	private static final UUID AWAY_BUILDER = UUID.fromString("00000000-0000-0000-0000-00000000a3a7");
 	private static final int N = 2;
 
 	@Override
@@ -680,10 +682,10 @@ public final class Behaviours implements FabricClientGameTest {
 		// Somebody in the box: no copy, as nothing else at a busy bench is done.
 		server.runOnServer(s -> {
 			Ledger.get(s).change(plot, Items.OAK_DOOR, 64);
-			Ledger.get(s).occupy(plot, UUID.randomUUID());
+			Ledger.get(s).arrive(plot, AWAY_BUILDER, "Away");
 		});
 		check(server.computeOnServer(s -> menu.getSlot(2).getItem().isEmpty()), "a copy shows while somebody is building at the bench");
-		server.runOnServer(s -> Ledger.get(s).occupy(plot, null));
+		server.runOnServer(s -> Ledger.get(s).depart(plot, AWAY_BUILDER));
 		check(server.computeOnServer(s -> !menu.getSlot(2).getItem().isEmpty()), "nobody building, no copy shows");
 
 		// Closed with the shed in: it comes back to the pack.

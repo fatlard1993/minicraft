@@ -81,21 +81,15 @@ public final class BenchScreen {
 		for (int n = Miniature.MIN_SIZE; n <= Miniature.MAX_SIZE; n++) {
 			int size = n;
 			screens.onAction(SIZE, "n" + n, (player, data) -> act(player, (level, bench) -> {
-				Ledger ledger = Ledger.get(level.getServer());
-				int plot = Bench.plotOf(level, bench);
-				Ledger.Project project = ledger.project(plot);
-				// A slab is exactly half a block, so it is cut to an even size.
-				if (project != null && project.n() == 0 && (!project.slab() || size % 2 == 0)) ledger.setSize(plot, size);
-				open(player, level, bench);
+				if (Bench.changeSize(player, level, bench, size)) open(player, level, bench);
+				else openSizes(player, level, bench);
 			}));
 		}
 		screens.onAction(SIZE, "format", (player, data) -> act(player, (level, bench) -> {
-			Ledger ledger = Ledger.get(level.getServer());
-			int plot = Bench.plotOf(level, bench);
-			Ledger.Project project = ledger.project(plot);
-			if (project != null && project.n() == 0) ledger.setSlab(plot, !project.slab());
-			open(player, level, bench);
+			Bench.changeFormat(player, level, bench);
+			openSizes(player, level, bench);
 		}));
+		screens.onAction(SIZE, "back", (player, data) -> act(player, (level, bench) -> open(player, level, bench)));
 		// Typed into as it changes; the screen stays open.
 		screens.onAction(MAIN, "name", (player, data) -> {
 			Pending asked = pending.get(player.getUUID());
@@ -115,11 +109,13 @@ public final class BenchScreen {
 			Ledger ledger = Ledger.get(level.getServer());
 			int plot = Bench.plotOf(level, bench);
 			Ledger.Project project = ledger.project(plot);
-			if (project != null && !project.busy()) ledger.setRedstone(plot, !project.redstone());
+			// A choice for finishing, like the name: fine with builders in the box, not while a capture runs.
+			if (project != null && !project.capturing()) ledger.setRedstone(plot, !project.redstone());
 			open(player, level, bench);
 		}));
 		screens.onAction(MAIN, "resize", (player, data) -> act(player, (level, bench) -> {
-			if (Bench.resize(player, level, bench)) open(player, level, bench);
+			if (Bench.resize(player, level, bench)) openSizes(player, level, bench);
+			else open(player, level, bench);
 		}));
 		screens.onAction(MAIN, "tab_build", (player, data) -> showTab(player, false));
 		screens.onAction(MAIN, "tab_copy", (player, data) -> showTab(player, true));
@@ -160,9 +156,7 @@ public final class BenchScreen {
 		if (project == null) return;
 		int plot = Bench.plotOf(level, bench);
 		if (project.n() == 0) {
-			ScreenBuilder screen = sizeScreen(project);
-			pending.put(player.getUUID(), new Pending(level, bench.immutable(), screen.screenId()));
-			PandoricalApi.screens().open(player, screen.build());
+			openSizes(player, level, bench);
 			return;
 		}
 		Layout layout = new Layout();
@@ -170,24 +164,51 @@ public final class BenchScreen {
 		layout.screenId = screen.screenId();
 		pending.put(player.getUUID(), new Pending(level, bench.immutable(), screen.screenId()));
 		BenchSlots slots = new BenchSlots(player, level, bench.immutable(), plot, layout);
+		slots.sent.put("inside", inside(project));
 		PandoricalApi.screens().openContainer(player, screen.build(), slots, Set.of());
 		if (player.containerMenu instanceof PandoricalMenu menu && menu.getModContainer() == slots) viewing.put(player.getUUID(), slots);
+	}
+
+	/**
+	 * The sizes and the format to choose from: the first time, or again later from the bench's
+	 * screen, when what is loaded is cut again to the size chosen.
+	 */
+	public static void openSizes(ServerPlayer player, ServerLevel level, BlockPos bench) {
+		if (!PandoricalApi.hasCapability(player, "screens")) {
+			Bench.say(player, "minicraft-justfatlard.needs_pandorical", "The bench needs the Pandorical mod on your client.");
+			return;
+		}
+		Ledger.Project project = Ledger.get(level.getServer()).project(Bench.plotOf(level, bench));
+		if (project == null) return;
+		ScreenBuilder screen = sizeScreen(project);
+		pending.put(player.getUUID(), new Pending(level, bench.immutable(), screen.screenId()));
+		PandoricalApi.screens().open(player, screen.build());
 	}
 
 	private static ScreenBuilder sizeScreen(Ledger.Project project) {
 		int rows = (Miniature.MAX_SIZE - Miniature.MIN_SIZE + COLUMNS) / COLUMNS;
 		int width = PAD * 2 + COLUMNS * BUTTON + (COLUMNS - 1) * GAP;
-		int sizesTop = 36 + 20 + GAP;
-		int height = sizesTop + rows * (BUTTON + GAP) + PAD;
+		boolean again = project.n() != 0;
+		int sizesTop = 36 + 20 + GAP + (again ? 12 : 0);
+		int height = sizesTop + rows * (BUTTON + GAP) + PAD + (again ? 20 + GAP : 0);
 		ScreenBuilder screen = new ScreenBuilder(SIZE).size(width, height).title("Miniature bench");
 		screen.panel("frame", 0, 0, width, height, Map.of());
 		screen.text("heading", PAD, PAD, Map.of(
 			ComponentType.PROP_TEXT, text("minicraft-justfatlard.size.heading", "Cut each block into how many to a side?"),
 			ComponentType.PROP_COLOR, "#404040"));
 		screen.text("note", PAD, PAD + 12, Map.of(
-			ComponentType.PROP_TEXT, text("minicraft-justfatlard.size.note", "Finer is more detail, and more to build."),
+			ComponentType.PROP_TEXT, again
+				? text("minicraft-justfatlard.size.note_again", "Now %s. What is loaded is cut again,", project.n())
+				: text("minicraft-justfatlard.size.note", "Finer is more detail, and more to build."),
 			ComponentType.PROP_COLOR, "#707070"));
-		screen.button("format", PAD, 36, width - PAD * 2, 20, Map.of(ComponentType.PROP_LABEL, project.slab()
+		if (again) {
+			screen.text("note2", PAD, PAD + 24, Map.of(
+				ComponentType.PROP_TEXT, text("minicraft-justfatlard.size.note_again2", "nothing lost: a sliver too fine is kept aside."),
+				ComponentType.PROP_COLOR, "#707070"));
+			screen.button("back", PAD, sizesTop + rows * (BUTTON + GAP), width - PAD * 2, 20, Map.of(
+				ComponentType.PROP_LABEL, text("minicraft-justfatlard.size.back", "Keep %s", project.n())));
+		}
+		screen.button("format", PAD, 36 + (again ? 12 : 0), width - PAD * 2, 20, Map.of(ComponentType.PROP_LABEL, project.slab()
 			? text("minicraft-justfatlard.size.slab", "Makes: a slab, half a block (even sizes)")
 			: text("minicraft-justfatlard.size.block", "Makes: a block")));
 		int shown = 0;
@@ -195,7 +216,9 @@ public final class BenchScreen {
 			if (project.slab() && n % 2 != 0) continue;
 			int x = PAD + (shown % COLUMNS) * (BUTTON + GAP);
 			int y = sizesTop + (shown / COLUMNS) * (BUTTON + GAP);
-			screen.button("n" + n, x, y, BUTTON, BUTTON, Map.of(ComponentType.PROP_LABEL, Integer.toString(n)));
+			screen.button("n" + n, x, y, BUTTON, BUTTON, n == project.n()
+				? Map.of(ComponentType.PROP_LABEL, Integer.toString(n), ComponentType.PROP_ENABLED, "false")
+				: Map.of(ComponentType.PROP_LABEL, Integer.toString(n)));
 			shown++;
 		}
 		return screen;
@@ -226,7 +249,8 @@ public final class BenchScreen {
 		int buttonsTop = nameTop + 18 + GAP;
 		int copyLinesTop = listTop + 76;
 		int copyBottom = copyLinesTop + (SHOWN_COST + 1) * 10 + 4;
-		int packTop = Math.max(buttonsTop + 2 * (20 + GAP) + 14, copyBottom);
+		int insideTop = buttonsTop + 2 * (20 + GAP) + 2;
+		int packTop = Math.max(insideTop + 12 + 12, copyBottom);
 		int height = packTop + 3 * 18 + 4 + 18 + PAD;
 		List<String> build = layout.build;
 		List<String> copy = layout.copy;
@@ -303,10 +327,11 @@ public final class BenchScreen {
 		screen.button("enter", PAD, buttonsTop, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.enter", "Step in")), build, "enter", true));
 		screen.button("finish", PAD + half + GAP, buttonsTop, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.finish", "Finish")), build, "finish", true));
 		screen.button("withdraw", PAD, buttonsTop + 20 + GAP, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.withdraw", "Take out what is left")), build, "withdraw", true));
-		ServerLevel workshop = Workshop.level(level.getServer());
-		if (workshop != null && Bench.mayResize(workshop, plot, project)) {
-			screen.button("resize", PAD + half + GAP, buttonsTop + 20 + GAP, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.resize", "Choose another size")), build, "resize", true));
-		}
+		screen.text("inside", PAD, insideTop, props(Map.of(
+			ComponentType.PROP_TEXT, inside(project),
+			ComponentType.PROP_COLOR, GREY), build, "inside", true));
+		// Always offered: pressed with somebody in the box or something built in it, it says which.
+		screen.button("resize", PAD + half + GAP, buttonsTop + 20 + GAP, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.resize", "Choose another size")), build, "resize", true));
 
 		// --- Copy: built hidden, its two grids away from the screen until the tab is shown ---
 		layout.copyY = listTop;
@@ -364,6 +389,23 @@ public final class BenchScreen {
 		refresh(open);
 	}
 
+	/** Who is building in the box now, for the Build tab; blank when nobody is. */
+	private static String inside(Ledger.Project project) {
+		if (project == null) return "";
+		if (project.capturing()) return text("minicraft-justfatlard.bench.trying", "Trying a build out...");
+		if (project.occupants().isEmpty()) return "";
+		return text("minicraft-justfatlard.bench.inside", "Building here: %s", Bench.whoInside(project));
+	}
+
+	/** Who is building, as it is now, sent only when it changed: people step in and out with the screen open. */
+	private static void refreshInside(BenchSlots open) {
+		String now = inside(open.project());
+		if (now.equals(open.sent.get("inside"))) return;
+		open.sent.put("inside", now);
+		PandoricalApi.screens().update(open.viewer, open.layout.screenId,
+			List.of(new ComponentUpdateBuilder("inside").prop(ComponentType.PROP_TEXT, now).build()));
+	}
+
 	/** The copy's lines as they are now, sent only where they changed. */
 	static void refresh(BenchSlots open) {
 		if (!open.copying) return;
@@ -375,7 +417,9 @@ public final class BenchScreen {
 			case EMPTY -> GREY;
 			default -> RED;
 		};
-		lines.put("copy_status", new String[] {Copying.reason(offer).getString(), statusColor});
+		Ledger.Project here = open.project();
+		Component reason = offer.why() == Copying.Why.BUSY && here != null ? Bench.busyMessage(here) : Copying.reason(offer);
+		lines.put("copy_status", new String[] {reason.getString(), statusColor});
 		String function;
 		String functionColor = DARK;
 		if (plan.isEmpty()) {
@@ -442,6 +486,7 @@ public final class BenchScreen {
 				open.viewer.closeContainer();
 				continue;
 			}
+			refreshInside(open);
 			refresh(open);
 		}
 	}

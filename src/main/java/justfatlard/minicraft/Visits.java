@@ -46,6 +46,13 @@ import java.util.Set;
  * a little further, and their pack holds their materials: one stack per material, each a window
  * onto that material's budget, topped up from it as it is spent. The budget is the record, never
  * the pack; the pack is emptied on the way out and what they came in with is put back.
+ *
+ * <p>Any number may build in one box at once. Each has their own pack put aside on their own
+ * player, as one would; all of them build from the bench's one budget. Their windows are views of
+ * it and nothing more: every place and break is checked against the ledger and changes it on the
+ * server thread, one at a time, and everyone's windows are laid out again from it after each. An
+ * item in a window is never material: nothing in the workshop counts it, it cannot leave, and it is
+ * gone when its builder steps out.
  */
 public final class Visits {
 	private Visits() {}
@@ -83,14 +90,18 @@ public final class Visits {
 		if (HELD_ELSEWHERE.contains(player.level().dimension().identifier().getNamespace())) {
 			return tell(player, "minicraft-justfatlard.enter.held", "Not from here: leave this world first.");
 		}
-		if (project.capturing() || project.occupant() != null && !project.occupant().equals(player.getUUID())) {
-			return tell(player, "minicraft-justfatlard.enter.busy", "Somebody is building at this bench.");
+		if (project.capturing()) {
+			return tell(player, "minicraft-justfatlard.enter.trying", "A build is being tried out at this bench.");
 		}
 
 		player.stopRiding();
+		// Anything on the cursor or in the little crafting grid back into the pack first, so it is
+		// put aside with the rest rather than turning up in the workshop and being cleared away.
+		if (player.containerMenu != player.inventoryMenu) player.closeContainer();
+		player.inventoryMenu.removed(player);
 		Session.set(player, new Session(plot, Session.Home.of(player), Session.stashOf(player),
 			player.gameMode().getName(), player.getAbilities().mayfly));
-		ledger.occupy(plot, player.getUUID());
+		ledger.arrive(plot, player.getUUID(), player.getName().getString());
 
 		player.getInventory().clearContent();
 		player.removeAllEffects();
@@ -129,9 +140,15 @@ public final class Visits {
 	/** Everything about being in the workshop undone, wherever the player now is. */
 	static void finish(ServerPlayer player, Session session) {
 		Ledger ledger = Ledger.get(player.level().getServer());
-		Ledger.Project project = ledger.project(session.plot());
-		if (project != null && player.getUUID().equals(project.occupant())) ledger.occupy(session.plot(), null);
+		ledger.depart(session.plot(), player.getUUID());
 
+		// Windows held anywhere but the pack go too: on the cursor, in the little crafting grid, or
+		// in a crafting table, stonecutter or anvil built in the box, any of which the game would
+		// otherwise hand back to the restored pack as its screen closed. Closed first, so what it
+		// hands back comes to the workshop pack, and is cleared with it.
+		if (player.containerMenu != player.inventoryMenu) player.closeContainer();
+		player.inventoryMenu.setCarried(ItemStack.EMPTY);
+		player.inventoryMenu.getCraftSlots().clearContent();
 		Inventory inventory = player.getInventory();
 		inventory.clearContent();
 		for (Session.Slot slot : session.stash()) {
@@ -342,7 +359,7 @@ public final class Visits {
 		Item item = materialOf(state);
 		if (item == Items.AIR) return;
 		ledger.change(session.plot(), item, blocksIn(state));
-		refreshPack(player);
+		refreshBuilders(player.level().getServer(), session.plot());
 	}
 
 	/** A block placed in the box comes out of the budget. */
@@ -350,10 +367,30 @@ public final class Visits {
 		Session session = Session.of(player);
 		if (session == null) return;
 		Ledger.get(player.level().getServer()).change(session.plot(), item, -1);
-		refreshPack(player);
+		refreshBuilders(player.level().getServer(), session.plot());
 	}
 
-	/** Whether this player may put a block of this item at this spot: in their box, with some of it left. */
+	/**
+	 * Every builder in this plot's box who is here, their windows laid out again from the budget:
+	 * after any change to it, whoever made it, so one placing the last of something empties it for
+	 * all and one breaking it gives it back to all.
+	 */
+	public static void refreshBuilders(MinecraftServer server, int plot) {
+		Ledger.Project project = Ledger.get(server).project(plot);
+		if (project == null) return;
+		for (java.util.UUID id : List.copyOf(project.occupants().keySet())) {
+			ServerPlayer builder = server.getPlayerList().getPlayer(id);
+			Session session = builder == null ? null : Session.of(builder);
+			if (session != null && session.plot() == plot) refreshPack(builder);
+		}
+	}
+
+	/**
+	 * Whether this player may put a block of this item at this spot: in their box, with some of it
+	 * left in the budget, whatever their window shows. Asked at the start of every placing and
+	 * spent at its end, on the server thread, so two builders after the last cell of something get
+	 * it one at a time: the first has it, and the second is refused.
+	 */
 	public static boolean mayPlace(ServerPlayer player, BlockPos pos, Item item) {
 		Session session = Session.of(player);
 		if (session == null) return player.isCreative();
@@ -371,6 +408,7 @@ public final class Visits {
 		if (workshop == null || server.getTickCount() % 10 != 0) return;
 		boolean everySecond = server.getTickCount() % 20 == 0;
 		Ledger ledger = Ledger.get(server);
+		if (everySecond) reconcile(server, ledger);
 		for (ServerPlayer player : List.copyOf(workshop.players())) {
 			Session session = Session.of(player);
 			if (session == null) {
@@ -386,6 +424,9 @@ public final class Visits {
 				leave(player);
 				continue;
 			}
+			// Inside by the ledger too, should a stop between the two saves have left them out of it,
+			// and by the name they have now (a world from before had no names kept).
+			ledger.arrive(session.plot(), player.getUUID(), player.getName().getString());
 			AABB bounds = Workshop.bounds(session.plot(), project.n());
 			if (!bounds.contains(player.position())) {
 				Vec3 arrival = Workshop.arrival(session.plot(), project.n());
@@ -396,6 +437,22 @@ public final class Visits {
 			equip(player);
 			refreshPack(player);
 			outline(workshop, player, session.plot(), project.n(), project.height());
+		}
+	}
+
+	/**
+	 * Nobody counted inside a box who is here and is not in it: their visit is kept on them, saved
+	 * with their pack, so it is the word on where they are. One away is still inside, as their visit
+	 * is, and comes back to the box when they return.
+	 */
+	private static void reconcile(MinecraftServer server, Ledger ledger) {
+		for (int plot : ledger.occupiedPlots()) {
+			for (java.util.UUID id : List.copyOf(ledger.project(plot).occupants().keySet())) {
+				ServerPlayer player = server.getPlayerList().getPlayer(id);
+				if (player == null) continue;
+				Session session = Session.of(player);
+				if (session == null || session.plot() != plot) ledger.depart(plot, id);
+			}
 		}
 	}
 

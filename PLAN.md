@@ -405,6 +405,65 @@ a miniature block entity removed since the last one has its drawing cleared if t
 longer a miniature (a chunk unloading never changes it), and one that arrived is drawn once its
 chunk's entities are in and nothing of its drawing is there. `Behaviours.shipped` makes both moves.
 
+**Building together**: a bench's box takes any number of builders at once. The project keeps who is inside as
+an ordered map of id to name (`occupants`, saved; the old single `occupant` is still read), and each builder's
+visit stays on their own player as before, so every pack is put aside and given back on its own, crash-safe as
+one was. Stepping in now first closes any open menu and runs the inventory menu's own close, so a stack on the
+cursor or in the little crafting grid goes aside with the pack; stepping out closes any menu (a crafting table,
+stonecutter or anvil built in the box would hand its grid back on closing), and clears the cursor and the grid
+before the pack is emptied, so no window rides out on either. One budget: the windows are views and nothing
+more. Placing is checked against the ledger at the head of `BlockItem.place` and spent at its return, breaking
+refunds from the broken state (air gives nothing), all on the server thread, so two places at the last cell are
+served one after the other and the second refused, and one block broken twice gives back once. After every
+change to the budget (a place, a break, loading, withdrawing) every builder of that plot who is on the server
+has their windows laid out again. Withdrawing takes only whole blocks the ledger holds; a window is never
+material (nothing counts it, it cannot be dropped, thrown or put away, and it is cleared on the way out), so
+withdrawing under builders' windows cannot make any. Finishing and trying out, re-editing, copying and
+resizing wait for an empty box, and the refusal names who is in (`Bench.busyMessage`); nobody is pulled out.
+Loading, the name, the functional slot and the redstone choice are fine while people build, not during a
+capture. The bench screen has a line naming who is building, kept current four times a second; block-tip's
+card says how many. Once a second the ledger is set straight against the visits: a builder on the server
+whose visit is not this box is no longer counted, and one in the box who is not counted is added. One who has
+logged out in the box is still counted, as their visit is still on them. No cap on builders: nothing per
+builder grows past a list of names.
+
+`SharedBox` covers it, with the client's player and a stand-in (a Fabric `FakePlayer` put on the player list,
+as Learning Blocks' `Together` does) both stepping in: both packs put aside and given back slot for slot;
+both windows showing the stone; finishing, trying out and resizing refused with two in and the refusal naming
+both; the bench unbreakable by a third player; one cell of stone left, placed by one, the other's window empty
+and her stale stack refused, given back by a break and placed by her; the last cell placed by both in one task
+(one gets it, one block stands, nothing below zero) and one block broken by both in one task (one cell back);
+two stone loaded from outside reaching both windows and withdrawn again, a second withdraw from one cell giving
+nothing; one leaving with stone on the cursor and in the crafting grid and coming out with exactly his pack,
+and the inventory screen's close afterwards bringing nothing; the ledger keeping the other through three
+seconds of watching and through a save, by name; the first stepping back in beside her, then both out, and the
+build finishing. What the stand-in cannot show: she has no client, so her windows are read from the server's
+copy of her pack and never drawn, her places and breaks are the handler's calls rather than packets, "the same
+tick" is two calls in one server task (which is how two packets in one tick are handled, but no network race
+is staged), and a second client's screen, motes and handle hint are not seen.
+
+**Changing the size with material in** (`Ledger.resize`, `Bench.changeSize`, `Bench.changeFormat`): lossless. Each
+material keeps, beside its cells, a sliver: an exact fraction of a block (two `BigInteger`s, saved as "num/den" under
+`slivers`) that the current size could not cut. A change works from the exact amount held, cells over the old N³
+plus the sliver: the new cells are that times the new N³, rounded down, and the rest, less than one new cell,
+is the new sliver. Whole blocks come through exactly; nothing is ever rounded up, so no material is made, and
+nothing is rounded away, so 4 to 5 and back to 4 gives back the very cells. A sliver is never spent or withdrawn,
+and goes with a broken bench as crumbs do. Choosing a size for a bench with none folds in slivers kept from
+before. The size and the format change only with nobody in the box, no try-out running and nothing built in it
+(cells placed at one size mean nothing at another); the refusal says which. The format never re-slices (a block's
+cells are the same either way) and is now unlocked by the same rule; a slab still needs an even size. A change
+clears the handle, as the box is empty. "Choose another size" is always on the bench's screen and opens the size
+screen with the current size greyed out and a Keep button; there is no confirmation, since nothing can be lost,
+and the overlay names any material with a sliver set aside. Material held as crumbs is cut again too, rather than
+thrown away as choosing another size used to.
+
+`SharedBox.reslice` covers it: three stone at 4 to 8 is exactly 3 x 512 cells and withdraws as three stone; 101
+stone and 5 planks at 4 to 5 round down to 197 and 9 (never above the exact amount, never a cell below), with the
+stone's sliver kept; back to 4 gives 101 and 5 exactly with no sliver left; round trips 4, 8, 4 and 4, 7, 13, 16,
+3, 4 come home exact; the slivers survive a save and fold back in when read; refused with a block built in the
+box (size and format, nothing touched), with somebody inside, and during a try-out; a slab made with material in,
+refused an odd size, made a block again without re-slicing; and stepping in afterwards shows the budget as cut.
+
 Where the build differs from the plan so far:
 
 - No world border yet: a builder who strays past the bounds is brought back to the arrival spot,

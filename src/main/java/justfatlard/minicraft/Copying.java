@@ -201,7 +201,7 @@ public final class Copying {
 			case EMPTY -> Component.translatableWithFallback("minicraft-justfatlard.copy.empty", "Put a miniature in to copy it.");
 			case NO_BENCH -> Component.translatableWithFallback("minicraft-justfatlard.copy.no_bench", "The bench is gone.");
 			case NO_SIZE -> Component.translatableWithFallback("minicraft-justfatlard.copy.no_size", "Choose a size and load materials first.");
-			case BUSY -> Component.translatableWithFallback("minicraft-justfatlard.busy", "Somebody is building at this bench.");
+			case BUSY -> Component.translatableWithFallback("minicraft-justfatlard.copy.busy", "Somebody is in the box, or a build is being tried out: no copies until it is done.");
 			case UNCOUNTED -> Component.translatableWithFallback("minicraft-justfatlard.copy.uncounted", "Nothing in it counts as material to copy.");
 			case SHORT -> Component.translatableWithFallback("minicraft-justfatlard.copy.short", "Not enough material: load more of what is in red.");
 			case NEEDS_FUNCTION -> Component.translatableWithFallback("minicraft-justfatlard.copy.needs_function", "Needs %s in the functional slot.",

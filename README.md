@@ -12,12 +12,18 @@ A Miniature Bench cuts a block into 2 to 16 pieces a side. Load it with blocks, 
 
 Crafted from four planks, two by two, with an iron nugget and a spyglass side by side on top.
 
-1. **Choose a size and a shape.** Right-click the bench and pick how many pieces to cut each block into, from 2 to 16 a side, and whether it makes a block or a slab. Finer is more detail, and more to build: a block cut 8 to a side is a box 8 blocks across. A slab is half a block high, so its box is half as high, and it is cut to an even size so the half is exact. Both are kept until the bench is cleared to choose again.
+1. **Choose a size and a shape.** Right-click the bench and pick how many pieces to cut each block into, from 2 to 16 a side, and whether it makes a block or a slab. Finer is more detail, and more to build: a block cut 8 to a side is a box 8 blocks across. A slab is half a block high, so its box is half as high, and it is cut to an even size so the half is exact. Change either later with Choose another size, once nobody is in the box and nothing stands built in it: everything loaded is cut again to the new size, and nothing is lost. Whole blocks always come through whole; a sliver too fine for the new size to cut, less than one of its pieces, is kept aside, and comes back at a size that cuts it (8 to 5 and back to 8 gives back exactly what there was).
 2. **Load it.** Right-click the bench holding blocks and the whole stack goes in. A block loaded is N³ cells of that material, so a solid miniature of one material costs exactly one block, and a solid slab half of one; nothing built ever costs more than went in.
-3. **Step in.** You are taken to your own box in the workshop, with your pack put safely aside. You fly, blocks come away at a touch, and your pack holds your materials, one stack each, topped up from what the bench holds as you build. Placing a block spends a cell; breaking one gives it back. Only the box takes blocks, and the box's edges are drawn for you.
+3. **Step in.** You are taken to the bench's box in the workshop, with your pack put safely aside. You fly, blocks come away at a touch, and your pack holds your materials, one stack each, topped up from what the bench holds as you build. Placing a block spends a cell; breaking one gives it back. Only the box takes blocks, and the box's edges are drawn for you.
 4. **Come back.** The eye of ender in your pack takes you back to exactly where you stood, with exactly what you carried. Leaving is not finishing: step in and out as often as you like.
-5. **Finish.** The build is read into a miniature, handed to you, and the box emptied. Type a name in the bench first and the miniature carries it, like a block named at an anvil (50 letters at most, no colours); leave it blank and it has none.
+5. **Finish.** Once everyone has stepped out, the build is read into a miniature, handed to you, and the box emptied. Type a name in the bench first and the miniature carries it, like a block named at an anvil (50 letters at most, no colours); leave it blank and it has none.
 6. **Take out what is left.** Leftover material comes out as whole blocks; less than a block of anything stays in the bench for the next build.
+
+**Building together**: any number of people can step in at the same bench and build in its one box at once, each with their own pack put aside and given back to each exactly. Everyone builds from what the bench holds: when one of you places the last of a material it is gone from every pack, and it is back in every pack when somebody breaks one. Two of you reaching for the last one at the same moment never both get it.
+
+- **Fine while people build**: loading more (it turns up in their packs), naming the miniature, the functional slot, and responding to redstone. Taking out what is left takes only what the bench holds; what shows in a builder's pack is only a look at the same thing, never material of its own, so it shows less afterwards, or nothing.
+- **Waits until everyone is out**: finishing, trying a build out, working on a miniature again, copying and choosing another size (which also waits for the box to be empty). Nobody is pulled out for it: the bench says who is still in the box.
+- **Who is in**: the bench's screen names who is building there, and a bench with anybody in its box cannot be broken. Any builder can mark or unmark the handle with their own stick, and each has the box's edges drawn for them.
 
 **The functional slot**: the bench has one slot apart from its materials. Put a crafting table, a furnace, a chest, or another block a miniature can work as in it (a chest or furnace held in your hand also goes straight in with a right-click), and the miniature finished next works as that block. The block is spent on the miniature; until you finish, take it back out whenever you like.
 
@@ -91,6 +97,7 @@ Sneak and right-click a placed miniature with an empty hand. A dialog lists what
 - **A working miniature does not show it.** A furnace miniature does not light up while it burns, and a chest miniature's lid does not open: the look is the build's.
 - **A build holds at most 255 different block states.** Finishing says so if a build has more.
 - **Up to 35 materials** show in your pack at once in the workshop.
+- **Somebody who logs out in the box is still in it.** The bench waits for them to come back and step out before it finishes, as it would for anybody still building.
 
 ## Players Without A Mod
 
@@ -98,7 +105,7 @@ Sneak and right-click a placed miniature with an empty hand. A dialog lists what
 
 ## Block Tip
 
-With [block-tip](https://github.com/fatlard1993/block-tip) installed, a miniature's card says its name, how finely it is cut, whether it is a slab, who made it, and what it does and works as; a bench's says what it is working on.
+With [block-tip](https://github.com/fatlard1993/block-tip) installed, a miniature's card says its name, how finely it is cut, whether it is a slab, who made it, and what it does and works as; a bench's says what it is working on and how many are building in its box.
 
 ## Development
 

@@ -46,6 +46,8 @@ public final class MinicraftTips {
 		int materials = project.materials().size();
 		String held = materials == 0 ? "nothing loaded" : materials == 1 ? "1 material" : materials + " materials";
 		String function = project.function().isEmpty() ? "" : " · works as " + project.function().getHoverName().getString().toLowerCase(java.util.Locale.ROOT);
-		return "Cut " + project.n() + " to a side" + (project.slab() ? ", a slab" : "") + " · " + held + function + (project.busy() ? " · in use" : "");
+		int inside = project.occupants().size();
+		String use = project.capturing() ? " · trying a build out" : inside == 1 ? " · 1 building" : inside > 1 ? " · " + inside + " building" : "";
+		return "Cut " + project.n() + " to a side" + (project.slab() ? ", a slab" : "") + " · " + held + function + use;
 	}
 }

@@ -10,7 +10,8 @@
 		"fabric-client-gametest": [
 			"justfatlard.minicraft.gametest.BenchLoop",
 			"justfatlard.minicraft.gametest.Behaviours",
-			"justfatlard.minicraft.gametest.NotFromAnArena"
+			"justfatlard.minicraft.gametest.NotFromAnArena",
+			"justfatlard.minicraft.gametest.SharedBox"
 		]
 	},
 	"depends": {

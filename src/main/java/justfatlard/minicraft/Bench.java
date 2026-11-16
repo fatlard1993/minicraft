@@ -19,6 +19,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -83,7 +85,7 @@ public final class Bench {
 		Ledger ledger = Ledger.get(level.getServer());
 		Ledger.Project project = ledger.project(plot);
 		if (project == null) return false;
-		if (project.capturing()) return say(player, "minicraft-justfatlard.busy", "Somebody is building at this bench.");
+		if (project.capturing()) return refuseBusy(player, project);
 		Component refused = Functions.refusal(stack);
 		if (refused != null) {
 			player.sendOverlayMessage(refused);
@@ -135,7 +137,7 @@ public final class Bench {
 		level.playSound(null, pos, SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS, 1.0F, 0.8F);
 		player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.load.done",
 			"%s %s in: %s cells", count, item.getName(new ItemStack(item)), project.cells(item)));
-		refreshOccupant(level, project);
+		Visits.refreshBuilders(level.getServer(), plot);
 	}
 
 	/** A finished miniature back into the bench, to be built on again: stood up in the box, its cells already paid for. */
@@ -157,7 +159,7 @@ public final class Bench {
 			return;
 		}
 		if (project.busy()) {
-			say(player, "minicraft-justfatlard.busy", "Somebody is building at this bench.");
+			refuseBusy(player, project);
 			return;
 		}
 		if (project.n() != 0 && project.n() != miniature.n()) {
@@ -201,7 +203,9 @@ public final class Bench {
 		Ledger.Project project = ledger.project(plot);
 		ServerLevel workshop = Workshop.level(level.getServer());
 		if (project == null || workshop == null || project.n() == 0) return false;
-		if (project.busy()) return say(player, "minicraft-justfatlard.busy", "Somebody is building at this bench.");
+		// Nobody is brought out to finish: a build is finished when everyone building it has
+		// stepped out, and the one pressing it is told who has not.
+		if (project.busy()) return refuseBusy(player, project);
 
 		// The floor laid as it should be first: a capture cut short by a stopped server could have
 		// left it as redstone blocks, and the look as built would be captured powered.
@@ -268,24 +272,81 @@ public final class Bench {
 				left -= count;
 			}
 		});
-		refreshOccupant(level, ledger.project(plot));
+		// Only what is in the ledger comes out. Builders' windows are views of it, never material,
+		// so whatever they show, they show less now, or nothing.
+		Visits.refreshBuilders(level.getServer(), plot);
 	}
 
-	/** Throw the crumbs away and forget the size, so another can be chosen. Only with an empty box and less than a block of anything. */
+	/**
+	 * Whether the size or the format may change now: nobody in the box, no try-out running, and
+	 * nothing built in it, as cells placed at one size mean nothing at another. Says why not.
+	 */
 	public static boolean resize(ServerPlayer player, ServerLevel level, BlockPos pos) {
 		int plot = plotOf(level, pos);
-		Ledger ledger = Ledger.get(level.getServer());
-		Ledger.Project project = ledger.project(plot);
+		Ledger.Project project = Ledger.get(level.getServer()).project(plot);
 		ServerLevel workshop = Workshop.level(level.getServer());
 		if (project == null || workshop == null) return false;
-		if (project.busy()) return say(player, "minicraft-justfatlard.busy", "Somebody is building at this bench.");
-		if (!mayResize(workshop, plot, project)) return say(player, "minicraft-justfatlard.resize.not_empty", "Finish the build and take out what is left first.");
-		ledger.sweep(plot);
+		if (project.busy()) return refuseBusy(player, project);
+		if (project.n() != 0 && !boxEmpty(workshop, plot, project.n(), project.n())) {
+			return say(player, "minicraft-justfatlard.resize.built", "Something is built in the box: finish it, or break it all down, before changing the size.");
+		}
 		return true;
 	}
 
-	static boolean mayResize(ServerLevel workshop, int plot, Ledger.Project project) {
-		return project.n() == 0 || project.onlyCrumbs() && boxEmpty(workshop, plot, project.n(), project.n());
+	/**
+	 * Cut the bench to another size. With nothing chosen yet it is simply chosen; with material
+	 * loaded, everything held is cut again to the new size, nothing lost ({@link Ledger#resize}).
+	 */
+	public static boolean changeSize(ServerPlayer player, ServerLevel level, BlockPos pos, int size) {
+		int plot = plotOf(level, pos);
+		Ledger ledger = Ledger.get(level.getServer());
+		Ledger.Project project = ledger.project(plot);
+		if (project == null || size < Miniature.MIN_SIZE || size > Miniature.MAX_SIZE) return false;
+		// A slab is exactly half a block, so it is cut to an even size.
+		if (project.slab() && size % 2 != 0) return say(player, "minicraft-justfatlard.resize.even", "A slab is cut to an even size.");
+		if (project.n() == size) return true;
+		if (project.n() == 0) {
+			ledger.setSize(plot, size);
+			return true;
+		}
+		if (!resize(player, level, pos)) return false;
+		int was = project.n();
+		List<Item> slivered = ledger.resize(plot, size);
+		// The box is empty, so a handle marked in it marks nothing now.
+		ledger.setHandle(plot, null);
+		level.playSound(null, pos, SoundEvents.ITEM_FRAME_ROTATE_ITEM, SoundSource.BLOCKS, 1.0F, 1.0F);
+		if (slivered.isEmpty()) {
+			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.resize.done",
+				"Cut again from %s to %s a side: everything loaded came through.", was, size));
+		} else {
+			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.resize.sliver",
+				"Cut again to %s: a sliver of %s too fine to cut at %s is kept aside, and comes back at a size that cuts it.",
+				size, names(slivered), size));
+		}
+		return true;
+	}
+
+	/** Block or slab. Once material is in, only as the size may change: nobody in the box and nothing built in it. */
+	public static boolean changeFormat(ServerPlayer player, ServerLevel level, BlockPos pos) {
+		int plot = plotOf(level, pos);
+		Ledger ledger = Ledger.get(level.getServer());
+		Ledger.Project project = ledger.project(plot);
+		if (project == null) return false;
+		if (project.n() != 0) {
+			if (!resize(player, level, pos)) return false;
+			if (!project.slab() && project.n() % 2 != 0) {
+				return say(player, "minicraft-justfatlard.resize.slab_even", "A slab is cut to an even size: choose an even size first.");
+			}
+			ledger.setHandle(plot, null);
+		}
+		ledger.setSlab(plot, !project.slab());
+		return true;
+	}
+
+	private static String names(List<Item> items) {
+		List<String> names = new ArrayList<>();
+		for (Item item : items) names.add(new ItemStack(item).getHoverName().getString());
+		return String.join(", ", names);
 	}
 
 	/**
@@ -336,11 +397,35 @@ public final class Bench {
 		return !held.getListOrEmpty("Items").isEmpty() || held.contains("RecordItem");
 	}
 
-	private static void refreshOccupant(ServerLevel level, Ledger.Project project) {
-		if (project == null) return;
-		UUID occupant = project.occupant();
-		ServerPlayer builder = occupant == null ? null : level.getServer().getPlayerList().getPlayer(occupant);
-		if (builder != null) Visits.refreshPack(builder);
+	/** The most names said in one line; past that, how many more. */
+	private static final int NAMED = 4;
+
+	/** Who is in the box, by name: "Alex, Sam and 3 more". */
+	public static String whoInside(Ledger.Project project) {
+		List<String> names = new ArrayList<>();
+		for (String name : project.occupants().values()) names.add(name.isEmpty() ? "somebody" : name);
+		if (names.size() <= NAMED) return String.join(", ", names);
+		return Component.translatableWithFallback("minicraft-justfatlard.inside.more", "%s and %s more",
+			String.join(", ", names.subList(0, NAMED)), names.size() - NAMED).getString();
+	}
+
+	/** Why a busy bench will not do that now, naming who is still in its box. */
+	public static Component busyMessage(Ledger.Project project) {
+		if (project.capturing()) return Component.translatableWithFallback("minicraft-justfatlard.busy.trying", "A build is being tried out at this bench.");
+		return project.occupants().size() == 1
+			? Component.translatableWithFallback("minicraft-justfatlard.busy.one", "%s is still in the box: they step out first.", whoInside(project))
+			: Component.translatableWithFallback("minicraft-justfatlard.busy.many", "Still in the box: %s. Everyone steps out first.", whoInside(project));
+	}
+
+	static boolean refuseBusy(ServerPlayer player, Ledger.Project project) {
+		player.sendOverlayMessage(busyMessage(project));
+		return false;
+	}
+
+	/** The message for a bench that cannot be broken now, for the break event: who is in its box. */
+	static void tellBusy(ServerPlayer player, Level level, BlockPos pos) {
+		Ledger.Project project = Ledger.get(player.level().getServer()).project(plotOf(level, pos));
+		if (project != null) refuseBusy(player, project);
 	}
 
 	private static void give(ServerPlayer player, ItemStack stack) {
