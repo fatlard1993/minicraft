@@ -20,7 +20,8 @@ import net.minecraft.world.phys.Vec3;
  * registered when the server loads its data and not afterwards. A plot a few hundred blocks from
  * the next in an empty world is as private as a dimension and needs no restart.
  *
- * <p>A box is N blocks to a side, one block of it for each cell of the miniature, standing on a
+ * <p>A box is N blocks to a side, one block of it for each cell of the miniature (half as high for
+ * a slab), standing on a
  * floor that reaches a little past it on every side so there is somewhere to stand back and look.
  * Nothing walls it in: the box has to be built from outside as much as in, and a box two blocks
  * across has no inside to stand in.
@@ -61,10 +62,11 @@ public final class Workshop {
 		return row * PLOTS_PER_ROW + column;
 	}
 
-	public static boolean inBox(BlockPos pos, int plot, int n) {
+	/** Whether this spot is inside the box: N across and deep, and this high. */
+	public static boolean inBox(BlockPos pos, int plot, int n, int height) {
 		BlockPos min = origin(plot);
 		return pos.getX() >= min.getX() && pos.getX() < min.getX() + n
-			&& pos.getY() >= min.getY() && pos.getY() < min.getY() + n
+			&& pos.getY() >= min.getY() && pos.getY() < min.getY() + height
 			&& pos.getZ() >= min.getZ() && pos.getZ() < min.getZ() + n;
 	}
 

@@ -12,6 +12,7 @@
             "source": "block_entity",
             "include": [
               "minecraft:custom_data",
+              "minecraft:custom_name",
               "minecraft:container"
             ]
           }

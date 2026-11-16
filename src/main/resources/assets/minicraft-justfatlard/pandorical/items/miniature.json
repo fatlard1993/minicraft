@@ -1,0 +1,13 @@
+{
+  "model": {
+    "type": "minecraft:condition",
+    "property": "minecraft:has_component",
+    "component": "minecraft:custom_data",
+    "on_true": {
+      "type": "minecraft:special",
+      "base": "minicraft-justfatlard:item/miniature_cells",
+      "model": { "type": "pandorical:cells", "data": "miniature" }
+    },
+    "on_false": { "type": "minecraft:model", "model": "minicraft-justfatlard:item/miniature" }
+  }
+}

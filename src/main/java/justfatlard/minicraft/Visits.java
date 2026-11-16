@@ -5,6 +5,10 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBundlePacket;
+import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +33,7 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -98,6 +103,7 @@ public final class Visits {
 		player.getAbilities().flying = true;
 		player.onUpdateAbilities();
 		refreshPack(player);
+		explainHandle(player);
 		workshop.playSound(null, arrival.x, arrival.y, arrival.z, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.0F, 1.2F);
 		return true;
 	}
@@ -234,12 +240,35 @@ public final class Visits {
 		return marked(stack, LEAVE_MARK);
 	}
 
+	/** The handle explained in chat on stepping in, the first few times, and never again once one has been marked. */
+	static final int HANDLE_HINTS = 3;
+
+	private static void explainHandle(ServerPlayer player) {
+		int told = player.getAttachedOrElse(Session.HANDLE_HINTS, 0);
+		if (told >= HANDLE_HINTS) return;
+		player.setAttached(Session.HANDLE_HINTS, told + 1);
+		net.minecraft.ChatFormatting grey = net.minecraft.ChatFormatting.GRAY;
+		player.sendSystemMessage(Component.translatableWithFallback("minicraft-justfatlard.hint.handle1",
+			"Optional, a handle: the stick in your pack marks one lever, button or door in the box as the miniature's handle.").withStyle(net.minecraft.ChatFormatting.YELLOW));
+		player.sendSystemMessage(Component.translatableWithFallback("minicraft-justfatlard.hint.handle2",
+			"Right-click the placed miniature to work it, and while it is on it gives off a redstone signal, like a lever: a tiny door that opens, a tiny lever that runs a real circuit.").withStyle(grey));
+		player.sendSystemMessage(Component.translatableWithFallback("minicraft-justfatlard.hint.handle3",
+			"It is instead of a block in the bench's functional slot: a miniature has one or the other.").withStyle(grey));
+	}
+
 	static ItemStack markerItem() {
 		ItemStack stack = new ItemStack(Items.STICK);
 		CompoundTag mark = new CompoundTag();
 		mark.putBoolean(HANDLE_MARK, true);
 		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(mark));
-		stack.set(DataComponents.CUSTOM_NAME, Component.translatableWithFallback("minicraft-justfatlard.marker", "Mark the handle"));
+		stack.set(DataComponents.CUSTOM_NAME, Component.translatableWithFallback("minicraft-justfatlard.marker", "Mark the handle (optional)"));
+		net.minecraft.network.chat.Style plain = net.minecraft.network.chat.Style.EMPTY.withItalic(false).withColor(net.minecraft.ChatFormatting.GRAY);
+		stack.set(DataComponents.LORE, new net.minecraft.world.item.component.ItemLore(List.of(
+			Component.translatableWithFallback("minicraft-justfatlard.marker.lore1", "Right-click a lever, button or door in the box").withStyle(plain),
+			Component.translatableWithFallback("minicraft-justfatlard.marker.lore2", "to make it the miniature's handle. Placed,").withStyle(plain),
+			Component.translatableWithFallback("minicraft-justfatlard.marker.lore3", "a right-click works it: a redstone signal").withStyle(plain),
+			Component.translatableWithFallback("minicraft-justfatlard.marker.lore4", "while it is on, like a lever.").withStyle(plain),
+			Component.translatableWithFallback("minicraft-justfatlard.marker.lore5", "Instead of a block in the functional slot.").withStyle(plain))));
 		return stack;
 	}
 
@@ -261,13 +290,18 @@ public final class Visits {
 		if (session == null) return;
 		Ledger ledger = Ledger.get(player.level().getServer());
 		Ledger.Project project = ledger.project(session.plot());
-		if (project == null || !Workshop.inBox(pos, session.plot(), project.n()) || player.level().getBlockState(pos).isAir()) return;
+		if (project == null || !Workshop.inBox(pos, session.plot(), project.n(), project.height()) || player.level().getBlockState(pos).isAir()) return;
 		BlockPos cell = pos.subtract(Workshop.origin(session.plot()));
+		if (!cell.equals(project.handle()) && !project.function().isEmpty()) {
+			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.handle.has_function", Bench.FUNCTION_FIRST));
+			return;
+		}
 		if (cell.equals(project.handle())) {
 			ledger.setHandle(session.plot(), null);
 			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.handle.cleared", "No handle."));
 		} else {
 			ledger.setHandle(session.plot(), cell);
+			player.setAttached(Session.HANDLE_HINTS, HANDLE_HINTS);
 			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.handle.set",
 				"The %s is the handle.", player.level().getBlockState(pos).getBlock().getName()));
 		}
@@ -284,14 +318,28 @@ public final class Visits {
 		return 1;
 	}
 
+	/**
+	 * The material a block in the box stands for: the item it is made from, and what placing it
+	 * took off the budget. A potted plant is its pot and a cake with a candle its cake, as the
+	 * plant and the candle went in from the pack with a click, not placed. Air for a block no
+	 * material stands for (a piston's head, fire). Copying a miniature charges by this too
+	 * ({@link Copying}), so a copy costs what breaking the build in the box would give back.
+	 */
+	static Item materialOf(BlockState state) {
+		net.minecraft.world.level.block.Block block = state.getBlock();
+		if (block instanceof net.minecraft.world.level.block.FlowerPotBlock && block != net.minecraft.world.level.block.Blocks.FLOWER_POT) return Items.FLOWER_POT;
+		if (block instanceof net.minecraft.world.level.block.CandleCakeBlock) return Items.CAKE;
+		return block.asItem();
+	}
+
 	/** A block broken in the box goes back into the budget as the item it is made from. */
 	public static void broke(ServerPlayer player, BlockPos pos, BlockState state) {
 		Session session = Session.of(player);
 		if (session == null) return;
 		Ledger ledger = Ledger.get(player.level().getServer());
 		Ledger.Project project = ledger.project(session.plot());
-		if (project == null || !Workshop.inBox(pos, session.plot(), project.n())) return;
-		Item item = state.getBlock().asItem();
+		if (project == null || !Workshop.inBox(pos, session.plot(), project.n(), project.height())) return;
+		Item item = materialOf(state);
 		if (item == Items.AIR) return;
 		ledger.change(session.plot(), item, blocksIn(state));
 		refreshPack(player);
@@ -310,7 +358,7 @@ public final class Visits {
 		Session session = Session.of(player);
 		if (session == null) return player.isCreative();
 		Ledger.Project project = Ledger.get(player.level().getServer()).project(session.plot());
-		return project != null && Workshop.inBox(pos, session.plot(), project.n()) && project.cells(item) > 0;
+		return project != null && Workshop.inBox(pos, session.plot(), project.n(), project.height()) && project.cells(item) > 0;
 	}
 
 	/**
@@ -347,29 +395,38 @@ public final class Visits {
 			if (player.gameMode() != GameType.SURVIVAL) player.setGameMode(GameType.SURVIVAL);
 			equip(player);
 			refreshPack(player);
-			outline(workshop, player, session.plot(), project.n());
+			outline(workshop, player, session.plot(), project.n(), project.height());
 		}
 	}
 
-	/** The box's twelve edges, a mote a block, for this builder alone. */
-	private static void outline(ServerLevel level, ServerPlayer player, int plot, int n) {
+	/** The box's twelve edges, a mote a block, for this builder alone, sent together as one bundle. */
+	private static void outline(ServerLevel level, ServerPlayer player, int plot, int n, int height) {
 		BlockPos min = Workshop.origin(plot);
 		BlockPos handle = Ledger.get(level.getServer()).project(plot).handle();
+		BlockPos near = player.blockPosition();
+		List<Packet<? super ClientGamePacketListener>> motes = new ArrayList<>();
 		if (handle != null) {
 			BlockPos at = min.offset(handle);
-			level.sendParticles(player, ParticleTypes.HAPPY_VILLAGER, false, false, at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5, 4, 0.3, 0.3, 0.3, 0);
+			add(motes, near, new ClientboundLevelParticlesPacket(ParticleTypes.HAPPY_VILLAGER, false, false,
+				at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5, 0.3F, 0.3F, 0.3F, 0, 4));
 		}
 		for (int i = 0; i <= n; i++) {
 			for (int a = 0; a <= 1; a++) for (int b = 0; b <= 1; b++) {
-				mote(level, player, min.getX() + i, min.getY() + a * n, min.getZ() + b * n);
-				mote(level, player, min.getX() + a * n, min.getY() + i, min.getZ() + b * n);
-				mote(level, player, min.getX() + a * n, min.getY() + b * n, min.getZ() + i);
+				mote(motes, near, min.getX() + i, min.getY() + a * height, min.getZ() + b * n);
+				if (i <= height) mote(motes, near, min.getX() + a * n, min.getY() + i, min.getZ() + b * n);
+				mote(motes, near, min.getX() + a * n, min.getY() + b * height, min.getZ() + i);
 			}
 		}
+		if (!motes.isEmpty()) player.connection.send(new ClientboundBundlePacket(motes));
 	}
 
-	private static void mote(ServerLevel level, ServerPlayer player, double x, double y, double z) {
-		level.sendParticles(player, ParticleTypes.END_ROD, false, false, x, y, z, 1, 0, 0, 0, 0);
+	private static void mote(List<Packet<? super ClientGamePacketListener>> motes, BlockPos near, double x, double y, double z) {
+		add(motes, near, new ClientboundLevelParticlesPacket(ParticleTypes.END_ROD, false, false, x, y, z, 0, 0, 0, 0, 1));
+	}
+
+	/** Only the motes vanilla would send them one by one: those within its particle range of the builder. */
+	private static void add(List<Packet<? super ClientGamePacketListener>> motes, BlockPos near, ClientboundLevelParticlesPacket mote) {
+		if (near.closerToCenterThan(new Vec3(mote.x(), mote.y(), mote.z()), 32.0)) motes.add(mote);
 	}
 
 	private static boolean tell(ServerPlayer player, String key, String fallback) {

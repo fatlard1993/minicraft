@@ -10,6 +10,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
@@ -37,9 +38,14 @@ import java.util.TreeSet;
 public final class Ledger extends SavedData {
 	private static final String STORAGE_KEY = "minicraft_ledger";
 
-	/** One bench's project. N is zero until a size is chosen. */
+	/** One bench's project. N is zero until a size is chosen; a slab is chosen with it. */
 	public static final class Project {
 		int n;
+		boolean slab;
+		/** The block in the functional slot, which the miniature will work as; empty for none. */
+		ItemStack function = ItemStack.EMPTY;
+		/** The name the miniature will be given; empty for none. */
+		String name = "";
 		final LinkedHashMap<Identifier, Long> budget = new LinkedHashMap<>();
 		UUID occupant;
 		/** The behaviours chosen on the bench; see {@link Capture}. */
@@ -68,6 +74,24 @@ public final class Ledger extends SavedData {
 
 		public int n() {
 			return n;
+		}
+
+		/** Whether it makes a slab, half a block high, rather than a block. */
+		public boolean slab() {
+			return slab;
+		}
+
+		/** How many cells high the box and the miniature are: N, or half of it for a slab. */
+		public int height() {
+			return slab ? Miniature.slabHeight(n) : n;
+		}
+
+		public ItemStack function() {
+			return function;
+		}
+
+		public String name() {
+			return name;
 		}
 
 		public long cellsPerBlock() {
@@ -103,14 +127,18 @@ public final class Ledger extends SavedData {
 		}
 	}
 
-	private record Entry(int plot, int n, Map<String, Long> budget, Optional<UUID> occupant, boolean redstone, Optional<BlockPos> handle) {
+	private record Entry(int plot, int n, Map<String, Long> budget, Optional<UUID> occupant, boolean redstone, Optional<BlockPos> handle,
+			boolean slab, ItemStack function, String name) {
 		static final Codec<Entry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.INT.fieldOf("plot").forGetter(Entry::plot),
 			Codec.INT.fieldOf("n").forGetter(Entry::n),
 			Codec.unboundedMap(Codec.STRING, Codec.LONG).fieldOf("budget").forGetter(Entry::budget),
 			UUIDUtil.CODEC.optionalFieldOf("occupant").forGetter(Entry::occupant),
 			Codec.BOOL.optionalFieldOf("redstone", false).forGetter(Entry::redstone),
-			BlockPos.CODEC.optionalFieldOf("handle").forGetter(Entry::handle)
+			BlockPos.CODEC.optionalFieldOf("handle").forGetter(Entry::handle),
+			Codec.BOOL.optionalFieldOf("slab", false).forGetter(Entry::slab),
+			ItemStack.OPTIONAL_CODEC.optionalFieldOf("function", ItemStack.EMPTY).forGetter(Entry::function),
+			Codec.STRING.optionalFieldOf("name", "").forGetter(Entry::name)
 		).apply(instance, Entry::new));
 	}
 
@@ -145,6 +173,9 @@ public final class Ledger extends SavedData {
 			project.occupant = entry.occupant().orElse(null);
 			project.redstone = entry.redstone();
 			project.handle = entry.handle().orElse(null);
+			project.slab = entry.slab();
+			project.function = entry.function();
+			project.name = entry.name();
 			ledger.projects.put(entry.plot(), project);
 		}
 		ledger.nextPlot = stored.nextPlot();
@@ -157,7 +188,8 @@ public final class Ledger extends SavedData {
 		projects.forEach((plot, project) -> {
 			Map<String, Long> budget = new LinkedHashMap<>();
 			project.budget.forEach((id, cells) -> { if (cells > 0) budget.put(id.toString(), cells); });
-			entries.add(new Entry(plot, project.n, budget, Optional.ofNullable(project.occupant), project.redstone, Optional.ofNullable(project.handle)));
+			entries.add(new Entry(plot, project.n, budget, Optional.ofNullable(project.occupant), project.redstone, Optional.ofNullable(project.handle),
+				project.slab, project.function, project.name));
 		});
 		return new Stored(entries, nextPlot, new ArrayList<>(free));
 	}
@@ -190,7 +222,32 @@ public final class Ledger extends SavedData {
 		if (n == 0) {
 			project.redstone = false;
 			project.handle = null;
+			project.slab = false;
+			project.name = "";
 		}
+		setDirty();
+	}
+
+	/** Block or slab: chosen with the size, before it is set. */
+	public void setSlab(int plot, boolean slab) {
+		Project project = projects.get(plot);
+		if (project == null) return;
+		project.slab = slab;
+		setDirty();
+	}
+
+	/** What goes in the functional slot; empty for nothing. */
+	public void setFunction(int plot, ItemStack stack) {
+		Project project = projects.get(plot);
+		if (project == null) return;
+		project.function = stack;
+		setDirty();
+	}
+
+	public void setName(int plot, String name) {
+		Project project = projects.get(plot);
+		if (project == null) return;
+		project.name = name;
 		setDirty();
 	}
 
@@ -250,8 +307,10 @@ public final class Ledger extends SavedData {
 		Project project = projects.get(plot);
 		project.budget.clear();
 		project.n = 0;
+		project.slab = false;
 		project.redstone = false;
 		project.handle = null;
+		project.name = "";
 		setDirty();
 	}
 

@@ -70,7 +70,7 @@ public class Main implements ModInitializer {
 		// what this block's model draws, which is nothing. The build is drawn by displays.
 		PandoricalApi.content().registerBlock(MINIATURE_ID.toString(), new BlockRegistration()
 			.baseBlock("minecraft:glass")
-			// A handle is worked and storage opened with a right-click: the client must not predict a placement.
+			// A handle is worked and a function opened with a right-click: the client must not predict a placement.
 			.interactive()
 			.strength(MINIATURE_STRENGTH)
 			.requiresCorrectTool(false)
@@ -88,6 +88,7 @@ public class Main implements ModInitializer {
 
 		Session.init();
 		BenchScreen.register();
+		ConstructScreen.register();
 
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> {
 			if (blockEntity instanceof BenchBlockEntity && Bench.occupied(level, pos)) {
@@ -100,7 +101,7 @@ public class Main implements ModInitializer {
 			Session session = Session.of(builder);
 			if (session == null) return builder.isCreative();
 			Ledger.Project project = Ledger.get(server.getServer()).project(session.plot());
-			return project != null && Workshop.inBox(pos, session.plot(), project.n());
+			return project != null && Workshop.inBox(pos, session.plot(), project.n(), project.height());
 		});
 		PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> {
 			if (level instanceof ServerLevel server && Workshop.isWorkshop(server) && player instanceof ServerPlayer builder) {
@@ -108,14 +109,19 @@ public class Main implements ModInitializer {
 			}
 		});
 
+		// A handle worked with something in hand: the client, not knowing, uses the item in the air next.
+		UseItemCallback.EVENT.register((player, level, hand) ->
+			player instanceof ServerPlayer user && MiniatureBlockEntity.justWorkedWithItem(user) ? InteractionResult.FAIL : InteractionResult.PASS);
+		// A sneaking click with something that is not a block works a miniature's handle; vanilla would hand it to the item.
+		UseBlockCallback.EVENT.register(MiniatureBlock::sneakWithItem);
 		UseItemCallback.EVENT.register((player, level, hand) -> {
 			if (!Visits.isLeave(player.getItemInHand(hand))) return InteractionResult.PASS;
 			if (player instanceof ServerPlayer builder) Visits.leave(builder);
 			return InteractionResult.SUCCESS;
 		});
 
-		// In the workshop the stick marks the handle, and a chest built in the box stays shut:
-		// material put away in it would be material that never came back.
+		// In the workshop the stick marks the handle, and anything that holds things stays shut:
+		// none can be loaded, but material put away in one would be material that never came back.
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!(level instanceof ServerLevel server) || !Workshop.isWorkshop(server) || !(player instanceof ServerPlayer builder)) return InteractionResult.PASS;
 			if (Session.of(builder) == null) return InteractionResult.PASS;
@@ -128,6 +134,10 @@ public class Main implements ModInitializer {
 		});
 		ServerTickEvents.END_SERVER_TICK.register(Visits::watch);
 		ServerTickEvents.END_SERVER_TICK.register(Capture::tick);
+		ServerTickEvents.END_SERVER_TICK.register(Breaking::tick);
+		ServerTickEvents.END_SERVER_TICK.register(BenchScreen::tick);
+		ServerTickEvents.END_SERVER_TICK.register(ConstructScreen::tick);
+		ServerTickEvents.END_SERVER_TICK.register(Preview::tick);
 		// Pandorical keeps structures in memory only: draw each miniature again as its anchor loads, and let it go as it unloads.
 		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
 			if (entity instanceof Display.BlockDisplay anchor && anchor.entityTags().contains(MiniatureBlockEntity.ANCHOR_TAG)
@@ -139,6 +149,7 @@ public class Main implements ModInitializer {
 			if (entity instanceof Display.BlockDisplay anchor && anchor.entityTags().contains(MiniatureBlockEntity.ANCHOR_TAG)) {
 				PandoricalApi.structures().despawn(MiniatureBlockEntity.structureId(anchor));
 				PandoricalApi.blockShapes().clearShape(level, anchor.blockPosition());
+				PandoricalApi.blockMaterials().clearMaterial(level, anchor.blockPosition());
 			}
 		});
 		// A builder who died in the workshop wakes up outside it: put their pack back there.
@@ -150,6 +161,10 @@ public class Main implements ModInitializer {
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("block-tip")) {
 			justfatlard.minicraft.integration.MinicraftTips.register();
 		}
-		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> BenchScreen.forget(handler.getPlayer().getUUID()));
+		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+			BenchScreen.forget(handler.getPlayer().getUUID());
+			ConstructScreen.forget(handler.getPlayer().getUUID());
+			Preview.forget(handler.getPlayer().getUUID());
+		});
 	}
 }

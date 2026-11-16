@@ -238,11 +238,127 @@ Step 8, the behaviours, passes its own gametest (`Behaviours`): a lamp captured 
 follows the world's redstone and gives off light only while lit; a repeater relay captured right
 with nobody in the workshop (the box's chunk is kept ticking while it is tried, and the test fails
 without that); a lever marked with the stick, thrown by a right-click on the miniature, lighting a
-lamp beside it and going dark when thrown back; and a cupboard from one built-in chest, refusing a
-second container, a shulker box and another cupboard, keeping its diamonds through being broken
-and placed again, and refused by the bench while it still holds them. The handle is marked in the
-workshop with a stick kept in the builder's pack beside the way out. A chest built into the box
-stays shut in the workshop, so no material can be put away in it.
+lamp beside it and going dark when thrown back. The handle is marked in the workshop with a stick
+kept in the builder's pack beside the way out.
+
+Storage from a chest built into the box is gone; the bench has a **functional slot** instead, and
+the finished miniature works as the block put in it (`Functions`, one small kind per sort of
+block, each making the `Function` a placed miniature holds). Menus that keep nothing (crafting
+table, stonecutter, loom, smithing table, grindstone, cartography table, enchanting table counting
+real bookshelves, ender chest, the anvils, which wear through as an anvil does); 27-slot storage
+(any chest, barrel, shulker box; a trapped one signals while open); and the furnaces, brewing stand
+and jukebox, each a real vanilla block entity the miniature holds, ticks and saves, opened with
+vanilla's own menu. Its things and progress ride on the item in custom data beside the build
+(`function_state`), so they survive breaking and placing. Five small mixins let vanilla menus stay
+open at a spot that holds a miniature rather than the block, keep a held furnace from setting a
+furnace into the world as it lights, and hold every plain slot over something a miniature keeps
+to "no box in a box". Hoppers and comparators reach what a miniature keeps. A miniature from
+before the slot, with storage counted as slots and its things in a container component, is read
+back as a chest (or barrel) function holding them.
+
+**Slab format**, chosen with the size: an even N, a box N/2 high, a miniature half a block high on
+the half clicked. The cells are stored as before with an optional `height` beside `n` (absent for
+a block). **Majority material**: a placed miniature breaks, is quicker with the tool of, and sounds
+like the block filling most of its build as built; with the wrong tool it is as slow as that block
+is, and still drops whole, data, name and contents kept. The breaker's client is kept in step by
+setting their own break speed attribute while they break one (`Breaking`), and told the majority
+block as the position's material (`PandoricalApi.blockMaterials()`), so its own steps, landings,
+hits, cracks and break sound and crumble as the build; the server plays the build's sounds and
+dust to everyone else. **Names**: typed on the bench, carried
+as the item's custom name, kept through placing and re-editing, used for menu titles. **Facing**:
+a new miniature is placed as built, never turned to its placer; facing stays in the state so
+miniatures placed before keep their turn.
+
+`Behaviours` covers these too: the slot's refusals (a beacon, a lectern, stone, a chest with
+something in it) and giving a block back; a crafting-table miniature opening a crafting menu that
+stays open; a furnace miniature smelting while placed, staying a miniature while lit, keeping its
+things and progress through being broken and placed and finishing where it left off, refused by
+the bench while full and handing its furnace back to the slot once empty; a named chest miniature
+keeping three diamonds and its name through three rounds of breaking and placing with none spilled,
+its slots refusing a shulker box; a mostly-stone miniature breaking as stone does, slower by hand
+than with a pickaxe, and by hand still dropping whole with its build, name and diamonds, none
+spilled; a mostly-wool one sounding and breaking like wool; and a slab: half a block of
+material for a solid slab, nothing whole withdrawn from the half left, nothing placed above its
+box, bottom and top placement with the right shape, and the slab taken apart again giving back
+its one block exactly.
+
+**Copying** (`Copying`, and the Copy tab in `BenchScreen`): the bench screen has two tabs, Build
+and Copy, swapped in place with Pandorical's `visible` prop rather than reopened. Pandorical has no
+tab component, and a hidden `inventory_grid` still leaves its vanilla slots where it put them, so
+each grid not on the tab shown is also moved far off the screen, slots and all (one grid per slot
+set, moved, never two grids for one slot). The menu has three server slots: the functional slot (a
+window on the ledger, as before), the copy's input (the viewer's own, given back in
+`Container.stopOpen` as vanilla gives back a crafting grid, dropped if they have gone), and the
+output. The output is worked out every time it is asked for: it shows only while the Copy tab is up,
+the bench still stands with its viewer in reach, nobody is in its box or trying a build out, every
+material is held and any block needed is in the functional slot. The cost is the original's look as
+built, counted by the same state to material mapping as building and breaking in the box
+(`Visits.materialOf` and `blocksIn`, a door's or tall plant's upper half and a bed's head counted
+with their other half), converted to the bench's size per material as `ceil(cells * Nbench^3 /
+Nmini^3)`. Taking it charges in one step, checked again at that moment: through `removeItem` for a
+click, a drop or a double click, and through `setItem(EMPTY)` for a shift-click or number key,
+which move the shown stack first and empty the slot after (should that ever find the bench unable
+to pay, the copy is taken back off the viewer). One copy a tick, so a shift-click takes one. The
+copy is made fresh from the looks, function and name, so nothing the original holds comes with
+it; an anvil function needs any anvil and takes the spent one's wear. A screen whose bench is gone
+or whose viewer has walked off is closed four times a second, which gives the input back. Making
+the mapping one function for building and copying also gave a potted plant back its pot, and a
+candle cake its cake, when broken in the box: both were charged as placed and refunded nothing.
+
+`Behaviours` covers copying through the bench's own menu, opened by a right-click and clicked with
+`AbstractContainerMenu.clicked` as a click packet arrives: a shed of two planks and a door built
+from the pack costs exactly that, and its copy charges the same (two planks, one door) with the
+shed left in the slot and its name and maker carried; a shift-click takes one copy and charges
+once; no door, no copy, and a click takes and spends nothing; a copy shown, then the door drained
+before it is taken, gives nothing and charges nothing by click, shift-click, number key or a direct
+take; a bench with somebody in its box shows no copy; closing the screen gives the shed back; a
+build cut 3 to a side copied at a bench cutting 4 costs 3 stone for 1 cell and 12 cobblestone for
+5; a chest-working miniature holding three diamonds needs a chest, and its copy works as a chest,
+holds nothing and keeps its name while the original keeps its diamonds and the chest is spent; a
+chipped anvil serves for an anvil and the copy is chipped; and breaking the bench with the screen
+open closes it and gives the original back. Not clicked through: the tab buttons are pressed by
+calling `BenchScreen.showTab` (what their action handler calls) rather than sending the button's
+packet, and two players at one bench is not tested, as the test has one client; it rests on the
+take being checked against the shared ledger and functional slot at the moment of taking.
+
+**Building full size** (`Constructing`, `ConstructScreen`, `Preview`, `Transform`): a sneaking, empty-handed right-click on a
+placed miniature opens a Pandorical dialog listing its cost at full size (`Copying.cells` with no conversion: one block a
+cell, a door once, a double slab two) against the player's pack, hotbar and off hand, with Construct, Preview, and the
+turn, mirror, upside-down and reset buttons. The anchor never turns: the miniature's block is cell (0, 0, N-1), so the build
+runs east, north and up; a transform turns the content inside the same N by N box. Upside down is done by property (halves,
+slab type, vertical facings, attach face, hanging, vertical direction, up and down sides); a block with none whose shape is not
+the same either way up is kept as it is and counted, two-high blocks are kept upright, and if a kept block could not survive
+where it lands (asked of the world as it would be, through `Overlay`) the construct is refused. The transform is kept on the
+block entity only. Construct surveys again on the server at that moment: every non-air target air or replaceable and free
+of entities that block building, inside the build height and world border, not under spawn protection, `mayBuild`, not in
+the workshop, Pandorical trust for fire, lava and TNT, every chunk loaded; then the materials are taken all or none (none in
+creative), the miniature's own loot is given back (inventory, else at the feet), the blocks are set with
+`UPDATE_CLIENTS | UPDATE_KNOWN_SHAPE` as `Miniature.build` does, and the build is settled once as vanilla settles a placed
+structure: the world beside each edge face updated against the build, each block's shape against its neighbours (through
+`updateOrDestroy`, so anything unsupported drops as an item rather than vanishing), and `updateNeighborsAt` for every block.
+One place sound. The preview is particles to that player alone twice a second: white dust along the box's edges, green dust on the
+footprint's outline at the base, red dust on every spot in the way; it stops on a toggle, past 32 blocks, another dimension,
+the miniature gone, or two minutes.
+
+**A handle or a function, never both.** `Looks.hasHandle` is false whenever a function is present, so an older miniature with
+both keeps its function and contents and ignores its handle. The bench refuses a block in the functional slot while a handle is
+marked, the stick refuses to mark one while the slot holds a block, finishing refuses both, and re-editing brings back only the
+function. Clicks: sneak with an empty hand opens the dialog; otherwise a handle miniature works its handle on any click (a
+sneaking click with a non-block item through Fabric's use event, the item's use in the air that tick refused), a function
+miniature opens its function, and a sneaking click with a block places it as vanilla does. On entering the box the first three
+times (until a handle is marked), three chat lines explain the handle; the stick carries a name and lore saying the same.
+
+`Behaviours` covers it (`oneOrTheOther`, `fullSize`, `transforms`, `handles`), driven through `useItemOn` with the player
+sneaking and the dialog's buttons pressed through `ScreenRegistry.handleAction`, the server's handler for a button's packet:
+the cost equals the copy's; short, refused with nothing taken or placed; dirt in the way refused and found, grass not; the door
+drained after the dialog showed ready, refused; everything carried, built at the anchor with the corner, the far north-east top,
+the door's halves, the stair and the slabs checked by position, charged exactly, the miniature back with its name, build and
+diamonds; creative charged nothing; a slab built two high; a quarter turn, a mirror and upside down each placed where expected
+with stairs and slabs turned, the turn kept through closing and reopening; an upside-down torch refused until reset; a handle
+worked by a plain click and a sneaking stick, not by a sneaking empty hand (which opens the dialog), and a sneaking cobblestone
+placed on top; an old handle-and-chest opening as a chest and keeping its diamonds; the bench refusing a handle and a function
+together each way round and at finish. Not clicked through: the buttons' packets are not sent from the client (the handler is
+called with the packet the button would send), and the Construct button's disabled look is not checked on the client.
 
 Known limits of the behaviours as built:
 
@@ -251,20 +367,36 @@ Known limits of the behaviours as built:
 - A miniature with both a handle and a response to redstone powers whatever is beside it while
   its handle is on, and that can power it back, so it shows its powered look whenever the handle
   is on.
-- Hoppers do not reach a miniature's storage.
-- Storage is the chest or barrel's 27 slots, whichever it is, and one to a miniature.
+- Some blocks cannot be worked as and are refused in the slot: beacon, lectern, campfire, crafter,
+  dispenser, dropper, hopper, bell, note block, composter, cauldron, bed, respawn anchor, decorated
+  pot, chiseled bookshelf, shelf. Each either draws its work on the block itself or works through
+  its own block state, which a miniature does not have.
+- A working miniature does not show it: no lit furnace face, no opening lid.
+- Slab miniatures do not join into a double.
 
 Pandorical 15.27.0 carries the two extensions, each a new channel behind a capability, each with
 its frozen byte sample, and its full suite passes: `scaled_structures` (`StructureApi.setScale`)
 and `block_shapes` (`PandoricalApi.blockShapes()`, answered on the client by one mixin on a block
 state's shape and collision, which costs one flag check while no shapes are set).
 
+Pandorical 15.30.0 adds a third, `block_materials` (`PandoricalApi.blockMaterials()`): the block
+state a position sounds and crumbles as, set from the miniature's majority block beside its shape
+and cleared with it, and answered on the client by small mixins on the step, landing, mining and
+break lookups, each one flag check while no material is set.
+
 Step 9: block-tip's card for a miniature (its N, who made it, what it does) and for a bench (its
 size, its materials, whether it is in use); the maker recorded on the item as it is finished;
-textures for the bench (a ruled cutting mat on spruce, a drawer in each side) and the miniature
-item (a cottage on a plinth), drawn by `generate_textures.py` from vanilla's own; the mod icon;
+the bench's look (a spruce worktable three quarters of a block high, a ruled cutting mat on top
+and a drawer in each side, with an iron arm from a back corner holding vanilla's spyglass over the
+mat like a loupe; its shape is the 12-pixel body, which Pandorical sends to clients with the
+content sync) and the miniature item (a cottage on a plinth), drawn by `generate_textures.py` from vanilla's own; the mod icon;
 and a README covering the loop, the behaviours and the limits. The card is untested in a run:
 block-tip is not on the gametest classpath.
+
+The miniature item draws its own build on a Pandorical 15.30 client: `pandorical/items/miniature.json`
+is a `pandorical:cells` model reading the `miniature` key, which such a client loads in place of
+`items/miniature.json`; the cottage stays the plain model, for older clients and for a stack with
+no build. Pandorical's `CellsItems` gametest pictures it.
 
 Where the build differs from the plan so far:
 

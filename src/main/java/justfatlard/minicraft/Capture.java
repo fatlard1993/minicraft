@@ -48,30 +48,30 @@ public final class Capture {
 		final BlockPos bench;
 		final UUID player;
 		final String maker;
+		final int height;
 		final BlockPos handle;
-		final int storage;
 		final Deque<Step> steps = new ArrayDeque<>();
 		int wait;
 		Miniature off, powered, handled, handledPowered;
 		boolean failed;
 
-		Job(int plot, int n, ServerLevel benchLevel, BlockPos bench, UUID player, String maker, BlockPos handle, int storage) {
+		Job(int plot, int n, int height, ServerLevel benchLevel, BlockPos bench, UUID player, String maker, BlockPos handle) {
 			this.maker = maker;
 			this.plot = plot;
 			this.n = n;
+			this.height = height;
 			this.benchLevel = benchLevel;
 			this.bench = bench;
 			this.player = player;
 			this.handle = handle;
-			this.storage = storage;
 		}
 	}
 
 	private static final Map<Integer, Job> jobs = new HashMap<>();
 
 	/** Begin capturing the plot's build; the miniature is handed over when it is done. */
-	static void start(ServerPlayer player, ServerLevel level, BlockPos bench, int plot, Ledger.Project project, BlockPos handle, int storage) {
-		Job job = new Job(plot, project.n(), level, bench.immutable(), player.getUUID(), player.getName().getString(), handle, storage);
+	static void start(ServerPlayer player, ServerLevel level, BlockPos bench, int plot, Ledger.Project project, BlockPos handle) {
+		Job job = new Job(plot, project.n(), project.height(), level, bench.immutable(), player.getUUID(), player.getName().getString(), handle);
 		// The box's chunk kept ticking while it is tried out, or nothing scheduled in it (a
 		// repeater, a button, a piston) would ever happen with nobody standing there. A box fits in
 		// one chunk: plots start on chunk corners, and no box is more than sixteen across.
@@ -131,7 +131,7 @@ public final class Capture {
 	}
 
 	private static Miniature take(Job job) {
-		Optional<Miniature> look = Miniature.capture(workshop(job), Workshop.origin(job.plot), job.n);
+		Optional<Miniature> look = Miniature.capture(workshop(job), Workshop.origin(job.plot), job.n, job.height);
 		if (look.isEmpty()) {
 			job.failed = true;
 			tell(job, "minicraft-justfatlard.finish.too_many", "Too many different blocks to fit in one miniature.");
@@ -161,7 +161,7 @@ public final class Capture {
 	private static void hand(Job job) {
 		ServerLevel level = workshop(job);
 		Looks looks = new Looks(job.off, Optional.ofNullable(job.powered), Optional.ofNullable(job.handled),
-			Optional.ofNullable(job.handledPowered), Optional.ofNullable(job.handle), job.storage, Optional.of(job.maker));
+			Optional.ofNullable(job.handledPowered), Optional.ofNullable(job.handle), Optional.empty(), Optional.of(job.maker));
 		Workshop.clear(level, job.plot, job.n);
 		Bench.handOver(job.benchLevel, job.bench, job.plot, job.player, looks);
 	}

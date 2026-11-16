@@ -60,7 +60,16 @@ public record Session(int plot, Home home, List<Slot> stash, String gameMode, bo
 		.copyOnDeath()
 		.buildAndRegister(Identifier.fromNamespaceAndPath(Main.MOD_ID, "session"));
 
-	/** Loads the class, which registers the attachment; it must happen at init. */
+	/**
+	 * How many times a builder has been told about the handle on stepping in; set past the limit
+	 * once they have marked one, as then they know. Kept on the player, outside any visit.
+	 */
+	public static final AttachmentType<Integer> HANDLE_HINTS = AttachmentRegistry.<Integer>builder()
+		.persistent(Codec.INT)
+		.copyOnDeath()
+		.buildAndRegister(Identifier.fromNamespaceAndPath(Main.MOD_ID, "handle_hints"));
+
+	/** Loads the class, which registers the attachments; it must happen at init. */
 	static void init() {}
 
 	public static Session of(ServerPlayer player) {

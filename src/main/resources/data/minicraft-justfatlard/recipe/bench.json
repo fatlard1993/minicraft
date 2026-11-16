@@ -2,13 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    " A ",
-    "PTP",
-    "PPP"
+    "NS",
+    "PP",
+    "PP"
   ],
   "key": {
-    "A": "minecraft:amethyst_shard",
-    "T": "minecraft:crafting_table",
+    "N": "minecraft:iron_nugget",
+    "S": "minecraft:spyglass",
     "P": "#minecraft:planks"
   },
   "result": { "id": "minicraft-justfatlard:bench", "count": 1 }

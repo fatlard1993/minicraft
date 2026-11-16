@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Generate Minicraft's textures: the bench's top and sides, the miniature item, and the icon.
+"""Generate Minicraft's textures: the bench's top, sides and arm, the miniature item, and the icon.
 
-The bench is spruce with a cutting mat on top, ruled every four pixels the way a mat is ruled,
-and a drawer in its side. The miniature is a cottage on a plinth: oak walls, a brick roof and
+The bench is a spruce worktable three quarters of a block high, with a cutting mat on top, ruled
+every four pixels the way a mat is ruled, and a drawer in its side. From a back corner an iron arm
+holds a spyglass over the mat like a loupe: the spyglass is vanilla's own in-hand art and the arm
+an iron bar's rod, laid side by side in one sheet because the block atlas does not take item
+textures. The miniature is a cottage on a plinth: oak walls, a brick roof and
 chimney, a door and a window, every colour taken from the vanilla texture of what it is made of.
 
 Pure stdlib PNG reader and writer, as the rest of the suite, so it runs without Pillow, and
@@ -241,6 +244,8 @@ def bench_top():
 
 
 def bench_side():
+    """The body is 12 pixels high and its sides take the top 12 rows: a lip of stripped spruce
+    under the mat, the drawer, and a darker plinth along the floor."""
     planks = vanilla("block/spruce_planks.png")
     lip = vanilla("block/stripped_spruce_log.png")
     iron = average(vanilla("block/iron_block.png"))
@@ -248,13 +253,36 @@ def bench_side():
     for y in range(0, 2):
         for x in range(16):
             out[y][x] = shade(lip[y][x], 0.8)
-    for y in range(6, 12):
+    for y in range(3, 9):
         for x in range(3, 13):
-            if y in (6, 11) or x in (3, 12):
+            if y in (3, 8) or x in (3, 12):
                 out[y][x] = shade(planks[y][x], 0.55)
     for x in (7, 8):
-        out[8][x] = iron
-        out[9][x] = shade(iron, 0.75)
+        out[5][x] = iron
+        out[6][x] = shade(iron, 0.75)
+    for y in range(10, 12):
+        for x in range(16):
+            out[y][x] = shade(planks[y][x], 0.7)
+    return out
+
+
+def bench_arm():
+    """One sheet for the arm and the spyglass it holds. Columns 0-1 are vanilla's spyglass_model
+    as it is, so the spyglass's elements keep vanilla's own UVs; columns 4-5 are an iron bar's rod,
+    for the arm; columns 8-11 rows 0-3 a patch of iron block for the clamps. The rest stays clear
+    and nothing samples it."""
+    spyglass = vanilla("item/spyglass_model.png")
+    bars = vanilla("block/iron_bars.png")
+    block = vanilla("block/iron_block.png")
+    out = blank()
+    for y in range(16):
+        for x in (0, 1):
+            out[y][x] = spyglass[y][x]
+        for x in (4, 5):
+            out[y][x] = bars[y][x + 3]
+    for y in range(4):
+        for x in range(8, 12):
+            out[y][x] = shade(block[y + 1][x - 7], 0.68)
     return out
 
 
@@ -293,6 +321,7 @@ def miniature():
 def main():
     write_png(os.path.join(BLOCK, "bench_top.png"), bench_top())
     write_png(os.path.join(BLOCK, "bench_side.png"), bench_side())
+    write_png(os.path.join(BLOCK, "bench_arm.png"), bench_arm())
     item = miniature()
     write_png(os.path.join(ITEM, "miniature.png"), item)
     write_png(ICON, scale(item, 8))

@@ -5,6 +5,7 @@ import justfatlard.minicraft.BenchBlockEntity;
 import justfatlard.minicraft.Ledger;
 import justfatlard.minicraft.Main;
 import justfatlard.minicraft.Miniature;
+import justfatlard.minicraft.MiniatureBlock;
 import justfatlard.minicraft.MiniatureBlockEntity;
 import justfatlard.minicraft.Session;
 import justfatlard.minicraft.Visits;
@@ -214,7 +215,7 @@ public final class BenchLoop implements FabricClientGameTest {
 			check(server.computeOnServer(s -> Ledger.get(s).project(plot) == null), "the broken bench kept its plot");
 			System.out.println("[minicraft-test] whole loop passed");
 			standsOnIt(context, server, connection, origin.north(4));
-			picture(context, server, connection, origin.south(3));
+			picture(context, server, connection, origin.south(24));
 		}
 	}
 
@@ -252,7 +253,7 @@ public final class BenchLoop implements FabricClientGameTest {
 		check(Math.abs(standing - 0.25) < 0.01, "the player does not stand on the floor: " + standing + " above it");
 	}
 
-	/** A little cottage, built straight into a box, finished, and placed four ways round, to look at by eye. */
+	/** A little cottage, built straight into a box, finished, and placed four times, each as it was built, to look at by eye. */
 	private static void picture(ClientGameTestContext context, TestServerContext server, TestServerConnection connection, BlockPos at) {
 		int n = 8;
 		ItemStack cottage = server.computeOnServer(s -> {
@@ -278,30 +279,51 @@ public final class BenchLoop implements FabricClientGameTest {
 			workshop.setBlock(min.offset(3, 1, 7), Blocks.POPPY.defaultBlockState(), 2);
 			return Miniature.capture(workshop, min, n).orElseThrow().toItem();
 		});
+		// A garden bed in slab format: half as high as it is wide, half a block when placed.
+		ItemStack garden = server.computeOnServer(s -> {
+			ServerLevel workshop = Workshop.level(s);
+			BlockPos min = new BlockPos(0, 200, 32);
+			net.minecraft.world.level.block.state.BlockState fence = Blocks.OAK_FENCE.defaultBlockState();
+			for (int x = 0; x < n; x++) for (int z = 0; z < n; z++) {
+				boolean edge = x == 0 || x == n - 1 || z == 0 || z == n - 1;
+				boolean path = x == 3 || x == 4;
+				workshop.setBlock(min.offset(x, 0, z), path ? Blocks.DIRT_PATH.defaultBlockState() : Blocks.GRASS_BLOCK.defaultBlockState(), 2);
+				net.minecraft.world.level.block.state.BlockState above = edge && !(path && z == n - 1) ? fence
+					: path ? Blocks.AIR.defaultBlockState()
+					: (x + z) % 3 == 0 ? Blocks.POPPY.defaultBlockState()
+					: (x + z) % 3 == 1 ? Blocks.DANDELION.defaultBlockState() : Blocks.CORNFLOWER.defaultBlockState();
+				workshop.setBlock(min.offset(x, 1, z), above, 3);
+			}
+			return Miniature.capture(workshop, min, n, n / 2).orElseThrow().toItem();
+		});
 		server.runOnServer(s -> {
-			for (int i = 0; i < 4; i++) s.overworld().setBlockAndUpdate(at.east(i * 2).below(), Blocks.STONE.defaultBlockState());
+			for (int i = 0; i < 3; i++) s.overworld().setBlockAndUpdate(at.east(i * 2).below(), Blocks.STONE.defaultBlockState());
 			s.overworld().setBlockAndUpdate(at.west(2), Main.BENCH.defaultBlockState());
 		});
-		Direction[] faces = {Direction.SOUTH, Direction.EAST, Direction.NORTH, Direction.WEST};
-		for (int i = 0; i < 4; i++) {
+		ItemStack[] shown = {cottage, garden, cottage};
+		for (int i = 0; i < 3; i++) {
 			BlockPos spot = at.east(i * 2);
-			Direction facing = faces[i];
+			ItemStack item = shown[i];
+			boolean slab = item == garden;
 			server.runOnServer(s -> {
 				ServerLevel level = s.overworld();
-				level.setBlockAndUpdate(spot, Main.MINIATURE.defaultBlockState().setValue(justfatlard.minicraft.MiniatureBlock.FACING, facing));
-				if (level.getBlockEntity(spot) instanceof MiniatureBlockEntity m) m.applyComponentsFromItemStack(cottage);
-				Main.MINIATURE.setPlacedBy(level, spot, level.getBlockState(spot), null, cottage);
+				var state = Main.MINIATURE.defaultBlockState();
+				if (slab) state = state.setValue(MiniatureBlock.TYPE, net.minecraft.world.level.block.state.properties.SlabType.BOTTOM);
+				level.setBlockAndUpdate(spot, state);
+				if (level.getBlockEntity(spot) instanceof MiniatureBlockEntity m) m.applyComponentsFromItemStack(item);
+				Main.MINIATURE.setPlacedBy(level, spot, level.getBlockState(spot), null, item);
 			});
 		}
-		server.runCommand("gamemode spectator @a");
-		Vec3 middle = Vec3.atBottomCenterOf(at.east(3)).add(0, 0.4, 0);
-		justfatlard.pandorical.gametest.Pictures.look(server, middle.add(0, 1.6, 3.2), middle);
+		justfatlard.pandorical.gametest.Pictures.stage(context, server, justfatlard.pandorical.gametest.Pictures.AFTERNOON);
+		context.runOnClient(client -> client.gui.toastManager().clear());
+		Vec3 middle = Vec3.atBottomCenterOf(at.east(1)).add(0, 0.4, 0);
+		justfatlard.pandorical.gametest.Pictures.look(server, middle.add(0.4, 1.5, 3.4), middle);
 		context.waitTicks(20);
 		// This client draws structures, so it is sent each miniature's anchor and none of its figures.
 		int seen = context.computeOnClient(client -> client.level.getEntitiesOfClass(Display.BlockDisplay.class,
-			new AABB(at).expandTowards(7, 1, 0).inflate(0.5)).size());
-		check(seen == 4, "the client was sent figures, or no anchors: " + seen + " displays for four miniatures");
-		justfatlard.pandorical.gametest.Pictures.frame(context, connection, "cottages");
+			new AABB(at).expandTowards(5, 1, 0).inflate(0.5)).size());
+		check(seen == 3, "the client was sent figures, or no anchors: " + seen + " displays for three miniatures");
+		justfatlard.pandorical.gametest.Pictures.frame(context, connection, "miniatures");
 	}
 
 	private static long cells(TestServerContext server, int plot) {

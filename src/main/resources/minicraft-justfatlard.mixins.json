@@ -4,8 +4,15 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "BlockItemMixin",
+    "ContainerBlockEntityMixin",
     "EntityMixin",
-    "ServerLevelMixin"
+    "FurnaceMixin",
+    "ItemCombinerMenuMixin",
+    "LivingEntityMixin",
+    "MenuValidityMixin",
+    "ServerLevelMixin",
+    "ServerPlayerGameModeAccessor",
+    "SlotMixin"
   ],
   "injectors": {
     "defaultRequire": 1

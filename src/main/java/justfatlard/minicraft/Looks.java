@@ -4,11 +4,14 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 
 import java.util.Optional;
 
@@ -19,43 +22,69 @@ import java.util.Optional;
  * <p>As built is the only look a plain miniature has. One that responds to redstone also has a
  * powered look; one with a handle has a look with the handle worked, and with both, a look for
  * both at once. Four at most, which keeps a capture a fixed amount of work. The handle is the
- * cell that was worked, kept so the miniature can go back on a bench and keep it. Storage is the
- * number of slots the one chest or barrel in the build gives it; zero for none. The maker is
- * whoever finished it, by name, for the card.
+ * cell that was worked, kept so the miniature can go back on a bench and keep it. The function is
+ * the block from the bench's functional slot that a placed miniature works as (a furnace, a
+ * crafting table); see {@link Functions}. The maker is whoever finished it, by name, for the card.
+ *
+ * <p>A miniature made before the functional slot had its storage from a chest or barrel built
+ * into it, kept as a slot count; read back, that is a chest or barrel function.
  */
 public record Looks(Miniature off, Optional<Miniature> powered, Optional<Miniature> handled,
-		Optional<Miniature> handledPowered, Optional<BlockPos> handle, int storage, Optional<String> maker) {
+		Optional<Miniature> handledPowered, Optional<BlockPos> handle, Optional<Block> function, Optional<String> maker) {
 
-	static final Codec<Looks> EXTRAS = RecordCodecBuilder.create(instance -> instance.group(
-		Miniature.CODEC.optionalFieldOf("powered").forGetter(Looks::powered),
-		Miniature.CODEC.optionalFieldOf("handled").forGetter(Looks::handled),
-		Miniature.CODEC.optionalFieldOf("handled_powered").forGetter(Looks::handledPowered),
-		BlockPos.CODEC.optionalFieldOf("handle").forGetter(Looks::handle),
-		Codec.INT.optionalFieldOf("storage", 0).forGetter(Looks::storage),
-		Codec.STRING.optionalFieldOf("maker").forGetter(Looks::maker)
-	).apply(instance, (powered, handled, handledPowered, handle, storage, maker) ->
-		new Looks(null, powered, handled, handledPowered, handle, storage, maker)));
+	private record Extras(Optional<Miniature> powered, Optional<Miniature> handled, Optional<Miniature> handledPowered,
+			Optional<BlockPos> handle, Optional<Block> function, int storage, Optional<String> maker) {
+		static final Codec<Extras> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+			Miniature.CODEC.optionalFieldOf("powered").forGetter(Extras::powered),
+			Miniature.CODEC.optionalFieldOf("handled").forGetter(Extras::handled),
+			Miniature.CODEC.optionalFieldOf("handled_powered").forGetter(Extras::handledPowered),
+			BlockPos.CODEC.optionalFieldOf("handle").forGetter(Extras::handle),
+			BuiltInRegistries.BLOCK.byNameCodec().optionalFieldOf("function").forGetter(Extras::function),
+			// Only ever read: how a miniature from before the functional slot said it had storage.
+			Codec.INT.optionalFieldOf("storage", 0).forGetter(Extras::storage),
+			Codec.STRING.optionalFieldOf("maker").forGetter(Extras::maker)
+		).apply(instance, Extras::new));
+	}
 
 	public static Looks plain(Miniature off) {
-		return new Looks(off, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), 0, Optional.empty());
+		return new Looks(off, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+	}
+
+	/** The same looks working as this block, or as nothing. */
+	public Looks withFunction(Optional<Block> block) {
+		return new Looks(off, powered, handled, handledPowered, handle, block, maker);
 	}
 
 	public boolean respondsToRedstone() {
 		return powered.isPresent();
 	}
 
+	/**
+	 * Whether it has a handle to work. A miniature has a handle or a function, never both; one made
+	 * with both before that was settled keeps its function and what it holds, and its handle's
+	 * looks stay in its data unused.
+	 */
 	public boolean hasHandle() {
-		return handled.isPresent();
+		return handled.isPresent() && function.isEmpty();
 	}
 
-	public boolean hasStorage() {
-		return storage > 0;
+	public boolean hasFunction() {
+		return function.isPresent();
+	}
+
+	/** Whether what it works as keeps things in it: a chest, a furnace, a jukebox. */
+	public boolean keepsThings() {
+		return function.map(Functions::keepsThings).orElse(false);
+	}
+
+	public boolean isSlab() {
+		return off.isSlab();
 	}
 
 	/** The look for this moment: the nearest one captured, falling back to as built. */
 	public Miniature look(boolean isPowered, boolean isHandled) {
-		if (isHandled && isPowered && handledPowered.isPresent()) return handledPowered.get();
-		if (isHandled && handled.isPresent()) return handled.get();
+		if (isHandled && isPowered && hasHandle() && handledPowered.isPresent()) return handledPowered.get();
+		if (isHandled && hasHandle()) return handled.get();
 		if (isPowered && powered.isPresent()) return powered.get();
 		return off;
 	}
@@ -76,13 +105,20 @@ public record Looks(Miniature off, Optional<Miniature> powered, Optional<Miniatu
 		CompoundTag root = data.copyTag();
 		Optional<Miniature> off = Miniature.of(data);
 		if (off.isEmpty()) return Optional.empty();
-		Looks extras = EXTRAS.parse(NbtOps.INSTANCE, root).result().orElse(plain(off.get()));
-		return Optional.of(new Looks(off.get(), extras.powered(), extras.handled(), extras.handledPowered(), extras.handle(), extras.storage(), extras.maker()));
+		Optional<Extras> read = Extras.CODEC.parse(NbtOps.INSTANCE, root).result();
+		if (read.isEmpty()) return Optional.of(plain(off.get()));
+		Extras extras = read.get();
+		Optional<Block> function = extras.function();
+		if (function.isEmpty() && extras.storage() > 0) {
+			function = Optional.of(off.get().palette().stream().anyMatch(state -> state.is(Blocks.BARREL))
+				&& off.get().palette().stream().noneMatch(state -> state.is(Blocks.CHEST)) ? Blocks.BARREL : Blocks.CHEST);
+		}
+		return Optional.of(new Looks(off.get(), extras.powered(), extras.handled(), extras.handledPowered(), extras.handle(), function, extras.maker()));
 	}
 
 	public CustomData toData() {
 		CompoundTag root = off.toData().copyTag();
-		Tag extras = EXTRAS.encodeStart(NbtOps.INSTANCE, this).getOrThrow();
+		Tag extras = Extras.CODEC.encodeStart(NbtOps.INSTANCE, new Extras(powered, handled, handledPowered, handle, function, 0, maker)).getOrThrow();
 		if (extras instanceof CompoundTag more) root.merge(more);
 		return CustomData.of(root);
 	}
