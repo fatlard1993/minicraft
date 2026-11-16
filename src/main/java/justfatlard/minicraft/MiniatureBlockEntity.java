@@ -9,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.component.DataComponentGetter;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
@@ -482,12 +484,14 @@ public class MiniatureBlockEntity extends BlockEntity {
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		if (level instanceof ServerLevel) GONE.add(this);
 		if (function != null) function.removed();
 	}
 
 	@Override
 	public void setLevel(Level level) {
 		super.setLevel(level);
+		if (level instanceof ServerLevel) ARRIVED.add(this);
 		if (function != null) function.setLevel(level);
 		if (pendingFunction != null && function != null) {
 			loadFunction(level.registryAccess(), pendingFunction);
@@ -571,5 +575,58 @@ public class MiniatureBlockEntity extends BlockEntity {
 		if (held.isPresent()) function.load(held.get());
 		// Saved before the functional slot: the chest's things at the top, as "Items".
 		else function.load(input);
+	}
+
+	// --- Moved without being placed or broken ---
+
+	/**
+	 * Removed since the last tick: a block entity can go without the block's own removal being
+	 * told (Big Boats takes the block entity first and then clears the block with no neighbour
+	 * update, so neither removal hook runs), and its drawing would stay where it stood.
+	 */
+	private static final List<MiniatureBlockEntity> GONE = new ArrayList<>();
+
+	/**
+	 * Come into a world since the last tick, by any road: placed, loaded with its chunk, or set
+	 * back by something that never places it (a ship docking, a structure pasted), which would
+	 * leave it undrawn.
+	 */
+	private static final List<MiniatureBlockEntity> ARRIVED = new ArrayList<>();
+
+	/** How long one arrived waits for its chunk's entities, which load after its blocks do. */
+	private static final int ARRIVAL_PATIENCE = 200;
+
+	private int waited;
+
+	/**
+	 * Gone: clear the drawing only when the block there is no longer a miniature, which a chunk
+	 * unloading never changes, so its drawing unloads with it as usual. Arrived: draw it when its
+	 * chunk's entities are in and none of its drawing is here, so a chunk loading back never gets
+	 * a second one.
+	 */
+	public static void upkeep(MinecraftServer server) {
+		if (!GONE.isEmpty()) {
+			List<MiniatureBlockEntity> gone = List.copyOf(GONE);
+			GONE.clear();
+			for (MiniatureBlockEntity miniature : gone) {
+				if (!(miniature.level instanceof ServerLevel level) || !level.isLoaded(miniature.worldPosition)) continue;
+				if (level.getBlockState(miniature.worldPosition).is(Main.MINIATURE)) continue;
+				miniature.hide(level);
+			}
+		}
+		if (!ARRIVED.isEmpty()) {
+			List<MiniatureBlockEntity> arrived = List.copyOf(ARRIVED);
+			ARRIVED.clear();
+			for (MiniatureBlockEntity miniature : arrived) {
+				if (miniature.isRemoved() || !(miniature.level instanceof ServerLevel level)) continue;
+				BlockPos at = miniature.worldPosition;
+				if (!level.isLoaded(at) || level.getBlockEntity(at) != miniature) continue;
+				if (!level.areEntitiesLoaded(ChunkPos.pack(at))) {
+					if (++miniature.waited < ARRIVAL_PATIENCE) ARRIVED.add(miniature);
+					continue;
+				}
+				if (miniature.piecesHere(level).isEmpty()) miniature.show(level);
+			}
+		}
 	}
 }

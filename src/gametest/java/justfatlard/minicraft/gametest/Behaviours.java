@@ -95,6 +95,7 @@ public final class Behaviours implements FabricClientGameTest {
 			oneOrTheOther(context, server, connection, bench, plot);
 			copying(context, server, connection, bench, plot, origin.south(9));
 			fullSize(context, server, connection, origin);
+			shipped(context, server, connection, origin.west(9));
 			System.out.println("[minicraft-test] behaviours passed");
 		}
 	}
@@ -1236,6 +1237,61 @@ public final class Behaviours implements FabricClientGameTest {
 		Optional<Looks> looks = Looks.of(stack);
 		check(looks.isPresent(), "no miniature was handed over");
 		return looks.get();
+	}
+
+	/**
+	 * Carried off and set down the way Big Boats moves a block, which neither places nor breaks
+	 * it: the block entity saved and taken first, then the block cleared with no neighbour update;
+	 * and later the block set and the saved block entity loaded back. Its drawing goes with it
+	 * both ways, rather than staying where it stood and never coming back where it lands.
+	 */
+	private static void shipped(ClientGameTestContext context, TestServerContext server, TestServerConnection connection, BlockPos stand) {
+		ItemStack item = Looks.plain(mini(N, N, List.of(new Cell(0, 0, 0, Blocks.STONE.defaultBlockState()),
+			new Cell(1, 0, 1, Blocks.OAK_PLANKS.defaultBlockState())))).toItem();
+		BlockPos at = place(server, connection, item, stand);
+		context.waitTicks(3);
+		check(drawn(server, at) > 0, "the placed miniature is not drawn");
+
+		int flags = net.minecraft.world.level.block.Block.UPDATE_CLIENTS | net.minecraft.world.level.block.Block.UPDATE_KNOWN_SHAPE
+			| net.minecraft.world.level.block.Block.UPDATE_SUPPRESS_DROPS;
+		net.minecraft.nbt.CompoundTag saved = server.computeOnServer(s -> {
+			ServerLevel level = s.overworld();
+			var output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess());
+			level.getBlockEntity(at).saveWithId(output);
+			level.removeBlockEntity(at);
+			level.setBlock(at, Blocks.AIR.defaultBlockState(), flags);
+			return output.buildResult();
+		});
+		context.waitTicks(3);
+		check(drawn(server, at) == 0, "a miniature carried off left its drawing where it stood: " + drawn(server, at) + " pieces");
+		check(server.computeOnServer(s -> s.overworld().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new AABB(at).inflate(2)).isEmpty()),
+			"a miniature carried off dropped something");
+
+		BlockPos landed = at.east(3);
+		server.runOnServer(s -> {
+			ServerLevel level = s.overworld();
+			level.setBlockAndUpdate(landed.below(), Blocks.STONE.defaultBlockState());
+			BlockState state = Main.MINIATURE.defaultBlockState();
+			level.setBlock(landed, state, flags);
+			var restored = net.minecraft.world.level.block.entity.BlockEntity.loadStatic(landed, state, saved, level.registryAccess());
+			check(restored != null, "the saved miniature did not load back");
+			level.setBlockEntity(restored);
+		});
+		context.waitTicks(3);
+		check(drawn(server, landed) > 0, "a miniature set down by something that never places it was left undrawn");
+		int once = drawn(server, landed);
+		context.waitTicks(5);
+		check(drawn(server, landed) == once, "the set-down miniature was drawn again: " + once + " pieces, then " + drawn(server, landed));
+		check(server.computeOnServer(s -> s.overworld().getBlockEntity(landed) instanceof MiniatureBlockEntity m && m.looks().isPresent()),
+			"the set-down miniature lost its build");
+		server.runOnServer(s -> s.overworld().setBlockAndUpdate(landed, Blocks.AIR.defaultBlockState()));
+	}
+
+	/** How many of a miniature's drawn pieces (figures and its anchor) stand at this block. */
+	private static int drawn(TestServerContext server, BlockPos at) {
+		return server.computeOnServer(s -> s.overworld().getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class,
+			new AABB(at).inflate(0.01), piece -> piece.entityTags().contains(MiniatureBlockEntity.ANCHOR_TAG)
+				|| piece.entityTags().contains(MiniatureBlockEntity.FIGURE_TAG)).size());
 	}
 
 	private static BlockPos place(TestServerContext server, TestServerConnection connection, ItemStack item, BlockPos stand) {

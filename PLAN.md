@@ -398,6 +398,13 @@ is a `pandorical:cells` model reading the `miniature` key, which such a client l
 `items/miniature.json`; the cottage stays the plain model, for older clients and for a stack with
 no build. Pandorical's `CellsItems` gametest pictures it.
 
+A miniature moved by something that neither places nor breaks it keeps its drawing with it. Big
+Boats takes the block entity first and clears the block with no neighbour update, so neither removal
+hook runs, and docking sets the block and loads the block entity back without placing it. Each tick,
+a miniature block entity removed since the last one has its drawing cleared if the block there is no
+longer a miniature (a chunk unloading never changes it), and one that arrived is drawn once its
+chunk's entities are in and nothing of its drawing is there. `Behaviours.shipped` makes both moves.
+
 Where the build differs from the plan so far:
 
 - No world border yet: a builder who strays past the bounds is brought back to the arrival spot,

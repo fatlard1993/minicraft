@@ -78,6 +78,7 @@ Sneak and right-click a placed miniature with an empty hand. A dialog lists what
 
 ## Known Limits
 
+- **On a Big Boats ship** a miniature sails with the hull and is drawn as its build again wherever she docks, but at sea it is not drawn as its build.
 - **Redstone reaches a miniature from underneath** while it is tried out, so a circuit has to reach the floor of the box to respond.
 - **Looks, not a living circuit.** A miniature has up to four looks (as built, powered, handle worked, and both), captured as it finishes. Clocks, counters and anything that keeps time stay full size.
 - **A handle and redstone together**: while its handle is on, a miniature powers what is beside it, and that can power it back, so it shows its powered look.
