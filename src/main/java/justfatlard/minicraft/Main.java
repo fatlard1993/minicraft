@@ -139,6 +139,7 @@ public class Main implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(ConstructScreen::tick);
 		ServerTickEvents.END_SERVER_TICK.register(Preview::tick);
 		ServerTickEvents.END_SERVER_TICK.register(MiniatureBlockEntity::upkeep);
+		PandoricalApi.structures().drawings().register(MiniatureDrawing::draw);
 		// Pandorical keeps structures in memory only: draw each miniature again as its anchor loads, and let it go as it unloads.
 		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
 			if (entity instanceof Display.BlockDisplay anchor && anchor.entityTags().contains(MiniatureBlockEntity.ANCHOR_TAG)

@@ -3,6 +3,11 @@
 		"Build at full size, keep it as one block."
 	],
 	"versions": {
+		"0.2.1": [
+			"A miniature on a Big Boats ship shows its little build on deck while she sails, not just when she docks.",
+			"Build together: any number of people can step into one bench's box at once and build from its one supply, each with their own pack kept safe.",
+			"Change a bench's size with materials loaded: everything is cut again to the new size, nothing lost."
+		],
 		"0.2.0": [
 			"A miniature's item shows its own build, not the same little cottage for every one.",
 			"The bench is new: four planks, an iron nugget and a spyglass make a short worktable with a spyglass on an iron arm, unlocked by picking up a spyglass.",
