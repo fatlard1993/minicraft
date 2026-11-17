@@ -24,7 +24,7 @@ public abstract class ItemCombinerMenuMixin {
 	@Inject(method = "stillValid", at = @At("HEAD"), cancellable = true)
 	private void minicraft$atAMiniature(Player player, CallbackInfoReturnable<Boolean> cir) {
 		Optional<Boolean> working = access.evaluate((level, pos) -> level.getBlockState(pos).getBlock() instanceof MiniatureBlock
-			? Functions.stillWorking(level, pos, player) : null);
+			? Optional.of(Functions.stillWorking(level, pos, player)) : Optional.<Boolean>empty(), Optional.<Boolean>empty());
 		working.ifPresent(cir::setReturnValue);
 	}
 }

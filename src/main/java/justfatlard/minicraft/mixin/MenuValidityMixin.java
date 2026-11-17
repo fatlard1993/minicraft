@@ -23,7 +23,7 @@ public abstract class MenuValidityMixin {
 		at = @At("HEAD"), cancellable = true)
 	private static void minicraft$atAMiniature(ContainerLevelAccess access, Player player, Block block, CallbackInfoReturnable<Boolean> cir) {
 		Optional<Boolean> working = access.evaluate((level, pos) -> level.getBlockState(pos).getBlock() instanceof justfatlard.minicraft.MiniatureBlock
-			? Functions.stillWorking(level, pos, player) : null);
+			? Optional.of(Functions.stillWorking(level, pos, player)) : Optional.<Boolean>empty(), Optional.<Boolean>empty());
 		working.ifPresent(cir::setReturnValue);
 	}
 }
