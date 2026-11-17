@@ -14,7 +14,8 @@ import java.util.Optional;
 
 /**
  * A miniature carried in a Pandorical structure, such as a Big Boats ship at sea, drawn as its
- * build: the look its state says it wears, raised for a top slab and turned to its facing, read
+ * build: the look its state says it wears, turned, mirrored and flipped as it is set to be built,
+ * raised for a top slab and turned to its facing, read
  * from the block entity data saved with it. Registered with Pandorical's structure drawings, so
  * the mod carrying it needs to know nothing about miniatures.
  */
@@ -28,6 +29,9 @@ public final class MiniatureDrawing {
 		Optional<Looks> looks = CustomData.CODEC.parse(NbtOps.INSTANCE, kept).result().flatMap(Looks::of);
 		if (looks.isEmpty()) return Optional.empty();
 		Miniature look = looks.get().look(state.getValue(MiniatureBlock.POWERED), state.getValue(MiniatureBlock.HANDLED));
+		// Turned, mirrored and flipped as it was set to be built, as it is drawn ashore.
+		Transform transform = Transform.unpack(saved.getIntOr("construct_transform", 0));
+		if (!transform.isNone()) look = transform.apply(look).build();
 		float lift = look.isSlab() && state.getValue(MiniatureBlock.TYPE) == SlabType.TOP ? (float) (look.n() - look.height()) / look.n() : 0;
 		return Optional.of(new CellsDrawing(look.n(), look.height(), look.palette(), look.cells(), lift, turns(state.getValue(MiniatureBlock.FACING))));
 	}

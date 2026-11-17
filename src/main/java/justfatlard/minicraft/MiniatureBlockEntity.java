@@ -98,12 +98,23 @@ public class MiniatureBlockEntity extends BlockEntity {
 		return Optional.ofNullable(looks);
 	}
 
-	/** The look it wears now. */
+	/** The look it wears now, turned, mirrored and flipped as it is to be built full size. */
 	public Miniature miniature() {
 		if (looks == null) return null;
 		BlockState state = getBlockState();
-		return looks.look(state.getValue(MiniatureBlock.POWERED), state.getValue(MiniatureBlock.HANDLED));
+		Miniature look = looks.look(state.getValue(MiniatureBlock.POWERED), state.getValue(MiniatureBlock.HANDLED));
+		if (transform.isNone()) return look;
+		if (look != transformedFrom || !transform.equals(transformedBy)) {
+			transformed = transform.apply(look).build();
+			transformedFrom = look;
+			transformedBy = transform;
+		}
+		return transformed;
 	}
+
+	/** The last look transformed, what it was transformed from and by: asked for on every redraw and shape. */
+	private Miniature transformed, transformedFrom;
+	private Transform transformedBy;
 
 	private int lookIndex() {
 		BlockState state = getBlockState();
@@ -124,14 +135,20 @@ public class MiniatureBlockEntity extends BlockEntity {
 		return name != null ? name : otherwise;
 	}
 
-	/** How it is to be turned, mirrored and flipped when built full size. Changes nothing about how it is drawn. */
+	/** How it is to be turned, mirrored and flipped when built full size, which is how it is drawn too. */
 	public Transform transform() {
 		return transform;
 	}
 
+	/** Turned, mirrored or flipped: drawn so at once, by the cells that change, and kept. */
 	public void setTransform(Transform transform) {
+		if (transform.equals(this.transform)) return;
+		Miniature before = miniature();
+		double liftBefore = lift();
 		this.transform = transform;
+		java.util.Arrays.fill(shapes, null);
 		setChanged();
+		if (level instanceof ServerLevel server && looks != null) redraw(server, before, liftBefore);
 	}
 
 	/** The block it sounds and breaks like: whichever fills the most cells as built. */

@@ -28,7 +28,7 @@ import java.util.Set;
 
 /**
  * How a miniature is to be turned, mirrored and flipped when it is built full size: kept on the
- * placed miniature, never changing how the miniature itself is drawn.
+ * placed miniature, which is drawn that way too, so what it shows is what will be built.
  *
  * <p>Applied in this order: upside down, then mirrored left-right (west and east swapped, as seen
  * from in front of the build, its south side), then front-back (north and south swapped), then

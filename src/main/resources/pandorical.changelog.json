@@ -3,6 +3,9 @@
 		"Build at full size, keep it as one block."
 	],
 	"versions": {
+		"0.2.4": [
+			"Turning, mirroring or flipping a placed miniature in its dialog turns the miniature itself, not only the outline, so it shows what will be built."
+		],
 		"0.2.3": [
 			"The bench's screen fits on a small window again: two columns, with the materials in a list that scrolls.",
 			"With block-tip, a miniature's card shows its own build, not the little cottage.",

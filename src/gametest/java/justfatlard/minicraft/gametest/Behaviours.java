@@ -919,6 +919,22 @@ public final class Behaviours implements FabricClientGameTest {
 		BlockPos flipped = site(server, connection, Looks.plain(over).toItem(), origin.east(28).south(16));
 		openDialog(server, connection, flipped);
 		press(server, connection, "flip");
+		// The miniature itself turns over with the button, not only the outline: drawn, shaped and carried flipped.
+		check(server.computeOnServer(s -> {
+				Miniature shown = ((MiniatureBlockEntity) s.overworld().getBlockEntity(flipped)).miniature();
+				Miniature upside = Transform.NONE.flipped().apply(over).build();
+				return java.util.Arrays.equals(shown.cells(), upside.cells()) && shown.palette().equals(upside.palette()) && shown.height() == upside.height();
+			}),
+			"the miniature was not drawn upside down when Flip was pressed");
+		check(server.computeOnServer(s -> !s.overworld().getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, new net.minecraft.world.phys.AABB(flipped).inflate(0.01),
+				d -> d.entityTags().contains(MiniatureBlockEntity.FIGURE_TAG) && d.getBlockState().is(Blocks.STONE) && d.entityTags().stream().anyMatch(tag -> tag.endsWith("3,0,3"))).isEmpty()),
+			"the miniature's figures were not redrawn upside down: its stone is not at the bottom");
+		check(server.computeOnServer(s -> {
+				var saved = s.overworld().getBlockEntity(flipped).saveWithoutMetadata(s.registryAccess());
+				Miniature upside = Transform.NONE.flipped().apply(over).build();
+				return justfatlard.minicraft.MiniatureDrawing.draw(s.overworld().getBlockState(flipped), saved)
+					.map(d -> java.util.Objects.deepEquals(d.cells(), upside.cells()) && d.palette().equals(upside.palette())).orElse(false);
+			}), "carried to sea, the miniature would not be drawn upside down");
 		press(server, connection, "construct");
 		check(state(server, flipped.offset(0, 3, 0)).equals(low.setValue(SlabBlock.TYPE, SlabType.TOP)), "upside down, the slab is not a top slab up top");
 		check(state(server, flipped.offset(1, 3, 0)).equals(step.setValue(StairBlock.HALF, net.minecraft.world.level.block.state.properties.Half.TOP)), "upside down, the stair's half did not flip");
