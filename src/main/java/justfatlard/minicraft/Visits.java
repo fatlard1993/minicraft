@@ -134,7 +134,8 @@ public final class Visits {
 			BlockPos spawn = overworld.getRespawnData().pos();
 			player.teleportTo(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, Set.<Relative>of(), 0F, 0F, true);
 		}
-		finish(player, session);
+		// Crossing out of the workshop finishes the visit as it happens (see Main); finished once only.
+		if (Session.of(player) != null) finish(player, session);
 	}
 
 	/** Everything about being in the workshop undone, wherever the player now is. */

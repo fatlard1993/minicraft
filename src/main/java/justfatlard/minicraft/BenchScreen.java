@@ -3,6 +3,7 @@ package justfatlard.minicraft;
 import justfatlard.pandorical.api.ComponentBuilder;
 import justfatlard.pandorical.api.ComponentType;
 import justfatlard.pandorical.api.ComponentUpdateBuilder;
+import justfatlard.pandorical.protocol.ComponentDef;
 import justfatlard.pandorical.protocol.ComponentUpdate;
 import justfatlard.pandorical.screen.PandoricalMenu;
 import justfatlard.pandorical.api.PandoricalApi;
@@ -55,11 +56,15 @@ public final class BenchScreen {
 	private static final double REACH = 8.0;
 
 	private static final int PAD = 8;
-	private static final int WIDTH = 300;
+	private static final int WIDTH = 420;
+	/** The Build tab's left column: what the bench holds and the choices for the miniature. */
+	private static final int LEFT = 220;
+	private static final int COLUMN_GAP = 12;
+	private static final int ROW = 18;
 	private static final int BUTTON = 36;
 	private static final int GAP = 4;
 	private static final int COLUMNS = 5;
-	private static final int SHOWN_MATERIALS = 8;
+	private static final int SHOWN_MATERIALS = 3;
 	private static final int SHOWN_COST = 6;
 	private static final int TAB = 44;
 	/** Where a grid not on the tab shown is put, slots and all, so they can be neither seen nor clicked. */
@@ -242,15 +247,17 @@ public final class BenchScreen {
 
 	private static ScreenBuilder mainScreen(ServerLevel level, int plot, Ledger.Project project, Layout layout) {
 		List<Item> materials = project.materials();
-		int lines = Math.max(1, Math.min(materials.size(), SHOWN_MATERIALS) + (materials.size() > SHOWN_MATERIALS ? 1 : 0));
-		int listTop = 36;
-		int optionsTop = listTop + lines * 18 + 8;
-		int nameTop = optionsTop + 3 * 14 + 8;
-		int buttonsTop = nameTop + 18 + GAP;
-		int copyLinesTop = listTop + 76;
-		int copyBottom = copyLinesTop + (SHOWN_COST + 1) * 10 + 4;
-		int insideTop = buttonsTop + 2 * (20 + GAP) + 2;
-		int packTop = Math.max(insideTop + 12 + 12, copyBottom);
+		int top = 30;
+		int rightX = PAD + LEFT + COLUMN_GAP;
+		int rightWidth = WIDTH - PAD - rightX;
+		int optionsTop = top + SHOWN_MATERIALS * ROW + GAP;
+		int functionTop = optionsTop + 16;
+		int handleTop = functionTop + 22;
+		int buttonsTop = top + 18 + GAP;
+		int insideTop = buttonsTop + 3 * (20 + GAP);
+		int copyCostTop = top + 66;
+		int costRows = (SHOWN_COST + 2) / 2;
+		int packTop = Math.max(handleTop + 20, Math.max(insideTop + 20, copyCostTop + costRows * 10)) + GAP;
 		int height = packTop + 3 * 18 + 4 + 18 + PAD;
 		List<String> build = layout.build;
 		List<String> copy = layout.copy;
@@ -272,92 +279,111 @@ public final class BenchScreen {
 		screen.button("tab_copy", tabsLeft + TAB + GAP, PAD - 3, TAB, 13, Map.of(
 			ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.tab_copy", "Copy")));
 
-		// --- Build ---
+		// --- Build, left: what it holds, then the choices for the miniature ---
 		if (materials.isEmpty()) {
-			screen.text("empty", PAD, listTop + 4, props(Map.of(
+			screen.text("empty", PAD, top + 4, props(Map.of(
 				ComponentType.PROP_TEXT, text("minicraft-justfatlard.bench.nothing", "Nothing loaded yet."),
 				ComponentType.PROP_COLOR, GREY), build, "empty", true));
-		}
-		for (int i = 0; i < Math.min(materials.size(), SHOWN_MATERIALS); i++) {
-			Item item = materials.get(i);
-			long cells = project.cells(item);
-			long blocks = cells / project.cellsPerBlock();
-			int y = listTop + i * 18;
-			screen.itemIcon("icon" + i, PAD, y, BuiltInRegistries.ITEM.getKey(item).toString(), 1);
-			build.add("icon" + i);
-			screen.text("count" + i, PAD + 20, y + 4, props(Map.of(
-				ComponentType.PROP_TEXT, text("minicraft-justfatlard.bench.material", "%s: %s cells (%s whole)", new ItemStack(item).getHoverName().getString(), cells, blocks),
-				ComponentType.PROP_COLOR, DARK), build, "count" + i, true));
-		}
-		if (materials.size() > SHOWN_MATERIALS) {
-			screen.text("more", PAD, listTop + SHOWN_MATERIALS * 18 + 4, props(Map.of(
-				ComponentType.PROP_TEXT, text("minicraft-justfatlard.bench.more", "and %s more", materials.size() - SHOWN_MATERIALS),
-				ComponentType.PROP_COLOR, GREY), build, "more", true));
+		} else {
+			boolean scrolls = materials.size() > SHOWN_MATERIALS;
+			int textWidth = LEFT - 20 - (scrolls ? 8 : 0);
+			List<ComponentDef> rows = new ArrayList<>();
+			for (int i = 0; i < materials.size(); i++) {
+				Item item = materials.get(i);
+				long cells = project.cells(item);
+				long blocks = cells / project.cellsPerBlock();
+				int y = i * ROW;
+				rows.add(new ComponentBuilder("icon" + i, ComponentType.ITEM_ICON).bounds(0, y, 16, 16)
+					.prop(ComponentType.PROP_ITEM_ID, BuiltInRegistries.ITEM.getKey(item).toString())
+					.prop(ComponentType.PROP_ITEM_COUNT, "1").build());
+				rows.add(new ComponentBuilder("count" + i, ComponentType.TEXT).pos(20, y + 4)
+					.prop(ComponentType.PROP_TEXT, text("minicraft-justfatlard.bench.material", "%s: %s cells (%s whole)", new ItemStack(item).getHoverName().getString(), cells, blocks))
+					.prop(ComponentType.PROP_COLOR, DARK)
+					.prop(ComponentType.PROP_WRAP_WIDTH, String.valueOf(textWidth))
+					.prop(ComponentType.PROP_MAX_LINES, "1").build());
+			}
+			build.add("materials");
+			screen.scrollPanel("materials", PAD, top, LEFT, SHOWN_MATERIALS * ROW, Map.of(
+				"item_height", String.valueOf(ROW),
+				"visible_items", String.valueOf(SHOWN_MATERIALS),
+				"total_items", String.valueOf(materials.size()),
+				"scroll_offset", "0",
+				"show_scrollbar", String.valueOf(scrolls)), rows);
 		}
 
-		screen.button("redstone", PAD, optionsTop, WIDTH - PAD * 2, 12, props(Map.of(ComponentType.PROP_LABEL, project.redstone()
+		screen.button("redstone", PAD, optionsTop, LEFT, 12, props(Map.of(ComponentType.PROP_LABEL, project.redstone()
 			? text("minicraft-justfatlard.bench.redstone_on", "Responds to redstone: yes")
 			: text("minicraft-justfatlard.bench.redstone_off", "Responds to redstone: no")), build, "redstone", true));
-		screen.text("handle", PAD, optionsTop + 16, props(Map.of(
+		screen.text("handle", PAD, handleTop, props(Map.of(
 			ComponentType.PROP_TEXT, project.handle() != null
 				? text("minicraft-justfatlard.bench.handle_on", "Handle: marked")
 				: text("minicraft-justfatlard.bench.handle_off", "Handle: none (mark one in the box with the stick)"),
-			ComponentType.PROP_COLOR, DARK), build, "handle", true));
+			ComponentType.PROP_COLOR, DARK,
+			ComponentType.PROP_WRAP_WIDTH, String.valueOf(LEFT),
+			ComponentType.PROP_MAX_LINES, "2"), build, "handle", true));
 		ItemStack function = project.function();
 		// One grid for the functional slot, moved between the tabs: two would fight over the slot.
 		layout.functionX = PAD;
-		layout.functionBuildY = optionsTop + 26;
-		screen.inventoryGrid("function", PAD, layout.functionBuildY, 1, 1, BenchSlots.FUNCTION, Map.of(ComponentType.PROP_INTERP_TICKS, "1"));
-		screen.text("function_note", PAD + 22, optionsTop + 31, props(Map.of(
+		layout.functionBuildY = functionTop;
+		screen.inventoryGrid("function", PAD, functionTop, 1, 1, BenchSlots.FUNCTION, Map.of(ComponentType.PROP_INTERP_TICKS, "1"));
+		screen.text("function_note", PAD + 22, functionTop + (function.isEmpty() ? 0 : 5), props(Map.of(
 			ComponentType.PROP_TEXT, function.isEmpty()
 				? text("minicraft-justfatlard.bench.function_off", "Works as: nothing (put a crafting table, furnace or chest here)")
 				: text("minicraft-justfatlard.bench.function_on", "Works as: %s", function.getHoverName().getString()),
-			ComponentType.PROP_COLOR, DARK), build, "function_note", true));
-		screen.text("name_label", PAD, nameTop + 5, props(Map.of(
+			ComponentType.PROP_COLOR, DARK,
+			ComponentType.PROP_WRAP_WIDTH, String.valueOf(LEFT - 22),
+			ComponentType.PROP_MAX_LINES, "2"), build, "function_note", true));
+
+		// --- Build, right: the name, what to do, and who is in the box ---
+		screen.text("name_label", rightX, top + 5, props(Map.of(
 			ComponentType.PROP_TEXT, text("minicraft-justfatlard.bench.name", "Name:"),
 			ComponentType.PROP_COLOR, DARK), build, "name_label", true));
 		build.add("name");
 		screen.component(new ComponentBuilder("name", ComponentType.TEXT_INPUT)
-			.bounds(PAD + 40, nameTop, WIDTH - PAD * 2 - 40, 18)
+			.bounds(rightX + 34, top, rightWidth - 34, 18)
 			.prop(ComponentType.PROP_VALUE, project.name())
 			.prop(ComponentType.PROP_MAX_LENGTH, String.valueOf(Bench.MAX_NAME))
 			.prop(ComponentType.PROP_PLACEHOLDER, text("minicraft-justfatlard.bench.name_hint", "None (optional)")));
-
-		int half = (WIDTH - PAD * 2 - GAP) / 2;
-		screen.button("enter", PAD, buttonsTop, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.enter", "Step in")), build, "enter", true));
-		screen.button("finish", PAD + half + GAP, buttonsTop, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.finish", "Finish")), build, "finish", true));
-		screen.button("withdraw", PAD, buttonsTop + 20 + GAP, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.withdraw", "Take out what is left")), build, "withdraw", true));
-		screen.text("inside", PAD, insideTop, props(Map.of(
-			ComponentType.PROP_TEXT, inside(project),
-			ComponentType.PROP_COLOR, GREY), build, "inside", true));
+		int half = (rightWidth - GAP) / 2;
+		screen.button("enter", rightX, buttonsTop, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.enter", "Step in")), build, "enter", true));
+		screen.button("finish", rightX + half + GAP, buttonsTop, rightWidth - half - GAP, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.finish", "Finish")), build, "finish", true));
+		screen.button("withdraw", rightX, buttonsTop + 20 + GAP, rightWidth, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.withdraw", "Take out what is left")), build, "withdraw", true));
 		// Always offered: pressed with somebody in the box or something built in it, it says which.
-		screen.button("resize", PAD + half + GAP, buttonsTop + 20 + GAP, half, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.resize", "Choose another size")), build, "resize", true));
+		screen.button("resize", rightX, buttonsTop + 2 * (20 + GAP), rightWidth, 20, props(Map.of(ComponentType.PROP_LABEL, text("minicraft-justfatlard.bench.resize", "Choose another size")), build, "resize", true));
+		screen.text("inside", rightX, insideTop, props(Map.of(
+			ComponentType.PROP_TEXT, inside(project),
+			ComponentType.PROP_COLOR, GREY,
+			ComponentType.PROP_WRAP_WIDTH, String.valueOf(rightWidth),
+			ComponentType.PROP_MAX_LINES, "2"), build, "inside", true));
 
 		// --- Copy: built hidden, its two grids away from the screen until the tab is shown ---
-		layout.copyY = listTop;
+		layout.copyY = top;
 		layout.copyInX = PAD;
 		layout.copyOutX = WIDTH - PAD - 18;
-		layout.functionCopyY = listTop + 24;
+		layout.functionCopyY = top + 22;
 		screen.inventoryGrid("copy_in", AWAY, layout.copyY, 1, 1, BenchSlots.COPY_IN, Map.of(ComponentType.PROP_INTERP_TICKS, "1", ComponentType.PROP_VISIBLE, "false"));
 		screen.inventoryGrid("copy_out", AWAY, layout.copyY, 1, 1, BenchSlots.COPY_OUT, Map.of(ComponentType.PROP_INTERP_TICKS, "1", ComponentType.PROP_VISIBLE, "false"));
-		screen.text("copy_in_label", PAD + 22, listTop + 5, props(Map.of(
+		screen.text("copy_in_label", PAD + 22, top + 5, props(Map.of(
 			ComponentType.PROP_TEXT, text("minicraft-justfatlard.copy.original", "Miniature"),
 			ComponentType.PROP_COLOR, DARK), copy, "copy_in_label", false));
-		screen.text("copy_arrow", WIDTH / 2 - 6, listTop + 5, props(Map.of(
+		screen.text("copy_arrow", WIDTH / 2 - 6, top + 5, props(Map.of(
 			ComponentType.PROP_TEXT, "->",
 			ComponentType.PROP_COLOR, DARK), copy, "copy_arrow", false));
-		screen.text("copy_out_label", layout.copyOutX - 30, listTop + 5, props(Map.of(
+		screen.text("copy_out_label", layout.copyOutX - 30, top + 5, props(Map.of(
 			ComponentType.PROP_TEXT, text("minicraft-justfatlard.copy.copy", "Copy"),
 			ComponentType.PROP_COLOR, DARK), copy, "copy_out_label", false));
 		screen.text("copy_function", PAD + 22, layout.functionCopyY + 5, props(Map.of(
 			ComponentType.PROP_TEXT, "", ComponentType.PROP_COLOR, DARK), copy, "copy_function", false));
-		screen.text("copy_status", PAD, listTop + 50, props(Map.of(
+		screen.text("copy_status", PAD, top + 44, props(Map.of(
 			ComponentType.PROP_TEXT, "", ComponentType.PROP_COLOR, DARK), copy, "copy_status", false));
-		screen.text("copy_size", PAD, listTop + 62, props(Map.of(
+		screen.text("copy_size", PAD, top + 55, props(Map.of(
 			ComponentType.PROP_TEXT, "", ComponentType.PROP_COLOR, GREY), copy, "copy_size", false));
+		int costWidth = (WIDTH - PAD * 2 - COLUMN_GAP) / 2;
 		for (int i = 0; i <= SHOWN_COST; i++) {
-			screen.text("cost" + i, PAD, copyLinesTop + i * 10, props(Map.of(
-				ComponentType.PROP_TEXT, "", ComponentType.PROP_COLOR, DARK), copy, "cost" + i, false));
+			screen.text("cost" + i, PAD + (i / costRows) * (costWidth + COLUMN_GAP), copyCostTop + (i % costRows) * 10, props(Map.of(
+				ComponentType.PROP_TEXT, "", ComponentType.PROP_COLOR, DARK,
+				ComponentType.PROP_WRAP_WIDTH, String.valueOf(costWidth),
+				ComponentType.PROP_MAX_LINES, "1"), copy, "cost" + i, false));
 		}
 
 		int packLeft = (WIDTH - 9 * 18) / 2;

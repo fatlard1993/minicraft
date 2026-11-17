@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The card for a miniature says its name, how finely it is cut, who made it, and what it does,
+ * The card for a miniature shows its own build and says its name, how finely it is cut, who made it, and what it does,
  * since none of that shows; the card for a bench says what it is working on.
  *
  * <p>Compiled against block-tip's API and reached only from a mod-loaded check, so a server
@@ -26,6 +26,15 @@ public final class MinicraftTips {
 			if (level.getBlockEntity(pos) instanceof BenchBlockEntity) return describe(Ledger.get(level.getServer()).project(Bench.plotOf(level, pos)));
 			return null;
 		});
+		// The build as it is drawn in a hand; only the looks, never what a chest miniature holds.
+		// A block-tip from before 1.3.0 has no icon hook, and keeps the plain picture.
+		try {
+			BlockTipApi.icon((level, pos, state, player) -> level.getBlockEntity(pos) instanceof MiniatureBlockEntity miniature
+				? miniature.looks().map(Looks::toItem).orElse(null)
+				: null);
+		} catch (LinkageError older) {
+			// The card still names and describes it.
+		}
 	}
 
 	private static String describe(MiniatureBlockEntity miniature) {

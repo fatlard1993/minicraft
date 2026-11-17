@@ -3,5 +3,7 @@
   "block.minicraft-justfatlard.miniature": "Miniature",
   "minicraft-justfatlard.leave": "Back to the bench",
   "minicraft-justfatlard.marker": "Mark the handle",
-  "minicraft-justfatlard.enter.held": "Not from here: leave this world first."
+  "minicraft-justfatlard.enter.held": "Not from here: leave this world first.",
+  "minicraft-justfatlard.on_loan": "building at a Miniature Bench",
+  "minicraft-justfatlard.saved": "You were taken out of the box before you came to harm."
 }

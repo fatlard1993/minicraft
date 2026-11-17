@@ -3,6 +3,13 @@
 		"Build at full size, keep it as one block."
 	],
 	"versions": {
+		"0.2.3": [
+			"The bench's screen fits on a small window again: two columns, with the materials in a list that scrolls.",
+			"With block-tip, a miniature's card shows its own build, not the little cottage.",
+			"Nobody can trade with a builder in a bench's box: what they carry there is the bench's, not theirs.",
+			"Leaving the box by any other way, such as another mod's teleport, ends the visit just as stepping out does, and a blow that would kill you in the box takes you out of it instead.",
+			"Blocks built in the box are built, not worked: an anvil, a crafting table or a chest there does not open."
+		],
 		"0.2.1": [
 			"A miniature on a Big Boats ship shows its little build on deck while she sails, not just when she docks.",
 			"Build together: any number of people can step into one bench's box at once and build from its one supply, each with their own pack kept safe.",

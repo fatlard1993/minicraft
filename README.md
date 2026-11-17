@@ -14,8 +14,8 @@ Crafted from four planks, two by two, with an iron nugget and a spyglass side by
 
 1. **Choose a size and a shape.** Right-click the bench and pick how many pieces to cut each block into, from 2 to 16 a side, and whether it makes a block or a slab. Finer is more detail, and more to build: a block cut 8 to a side is a box 8 blocks across. A slab is half a block high, so its box is half as high, and it is cut to an even size so the half is exact. Change either later with Choose another size, once nobody is in the box and nothing stands built in it: everything loaded is cut again to the new size, and nothing is lost. Whole blocks always come through whole; a sliver too fine for the new size to cut, less than one of its pieces, is kept aside, and comes back at a size that cuts it (8 to 5 and back to 8 gives back exactly what there was).
 2. **Load it.** Right-click the bench holding blocks and the whole stack goes in. A block loaded is N³ cells of that material, so a solid miniature of one material costs exactly one block, and a solid slab half of one; nothing built ever costs more than went in.
-3. **Step in.** You are taken to the bench's box in the workshop, with your pack put safely aside. You fly, blocks come away at a touch, and your pack holds your materials, one stack each, topped up from what the bench holds as you build. Placing a block spends a cell; breaking one gives it back. Only the box takes blocks, and the box's edges are drawn for you.
-4. **Come back.** The eye of ender in your pack takes you back to exactly where you stood, with exactly what you carried. Leaving is not finishing: step in and out as often as you like.
+3. **Step in.** You are taken to the bench's box in the workshop, with your pack put safely aside. You fly, blocks come away at a touch, and your pack holds your materials, one stack each, topped up from what the bench holds as you build. Placing a block spends a cell; breaking one gives it back. Only the box takes blocks, and the box's edges are drawn for you. What you build there is built, not worked: an anvil, a crafting table or a chest in the box does not open.
+4. **Come back.** The eye of ender in your pack takes you back to exactly where you stood, with exactly what you carried. Leaving is not finishing: step in and out as often as you like. Leaving any other way (another mod's teleport, say) ends the visit the same way, wherever it takes you, and a blow that would kill you in the box takes you out of it instead. While you are in the box, other mods that ask Pandorical know that what you carry is the bench's: you can't trade it away, for one.
 5. **Finish.** Once everyone has stepped out, the build is read into a miniature, handed to you, and the box emptied. Type a name in the bench first and the miniature carries it, like a block named at an anvil (50 letters at most, no colours); leave it blank and it has none.
 6. **Take out what is left.** Leftover material comes out as whole blocks; less than a block of anything stays in the bench for the next build.
 
@@ -101,11 +101,11 @@ Sneak and right-click a placed miniature with an empty hand. A dialog lists what
 
 ## Players Without A Mod
 
-**Pandorical is required on the server and on every player's client**, version 15.30 or later. A Pandorical client draws a miniature as one object at its true scale and stands on its exact shape, and a slab miniature at its half; carried, its item shows its own build. A Pandorical client older than 15.30 shows every miniature item as the same little cottage. A client without Pandorical sees a placed miniature drawn with block displays and collides with a full block.
+**Pandorical is required on the server and on every player's client**, version 15.35 or later. A Pandorical client draws a miniature as one object at its true scale and stands on its exact shape, and a slab miniature at its half; carried, its item shows its own build. A Pandorical client older than 15.30 shows every miniature item as the same little cottage. A client without Pandorical sees a placed miniature drawn with block displays and collides with a full block.
 
 ## Block Tip
 
-With [block-tip](https://github.com/fatlard1993/block-tip) installed, a miniature's card says its name, how finely it is cut, whether it is a slab, who made it, and what it does and works as; a bench's says what it is working on and how many are building in its box.
+With [block-tip](https://github.com/fatlard1993/block-tip) installed (1.3 or later for the picture), a miniature's card shows its own build and says its name, how finely it is cut, whether it is a slab, who made it, and what it does and works as; a bench's says what it is working on and how many are building in its box.
 
 ## Development
 

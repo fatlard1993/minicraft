@@ -11,7 +11,8 @@
 			"justfatlard.minicraft.gametest.BenchLoop",
 			"justfatlard.minicraft.gametest.Behaviours",
 			"justfatlard.minicraft.gametest.NotFromAnArena",
-			"justfatlard.minicraft.gametest.SharedBox"
+			"justfatlard.minicraft.gametest.SharedBox",
+			"justfatlard.minicraft.gametest.StaysInTheBox"
 		]
 	},
 	"depends": {

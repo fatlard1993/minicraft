@@ -138,6 +138,9 @@ public final class SharedBox implements FabricClientGameTest {
 		check(server.computeOnServer(s -> Workshop.isWorkshop(me.level()) && Workshop.isWorkshop(sam.level())),
 			"not both in the workshop");
 		check(server.computeOnServer(s -> Session.of(me).plot() == plot && Session.of(sam).plot() == plot), "not both at this bench's box");
+		// What they carry is the bench's, not theirs: other mods asking Pandorical are told so.
+		check(server.computeOnServer(s -> justfatlard.pandorical.api.PandoricalApi.loans().onLoan(me) != null
+			&& justfatlard.pandorical.api.PandoricalApi.loans().onLoan(sam) != null), "a builder's pack was not reported on loan");
 		check(server.computeOnServer(s -> Ledger.get(s).project(plot).occupants().size()) == 2, "the bench does not count two inside");
 		check(server.computeOnServer(s -> Bench.whoInside(Ledger.get(s).project(plot))).equals(alex + ", Sam"), "the bench does not name both");
 		check(windowOf(server, me, Items.STONE) == 64 && windowOf(server, sam, Items.STONE) == 64,
@@ -267,6 +270,8 @@ public final class SharedBox implements FabricClientGameTest {
 		server.runOnServer(s -> Visits.leave(me));
 		check(samePack(server, me, alexPack), "Alex's pack changed over his second visit");
 		check(server.computeOnServer(s -> Ledger.get(s).project(plot).occupants().isEmpty()), "somebody is still counted inside");
+		check(server.computeOnServer(s -> justfatlard.pandorical.api.PandoricalApi.loans().onLoan(me) == null
+			&& justfatlard.pandorical.api.PandoricalApi.loans().onLoan(sam) == null), "a pack was still reported on loan after stepping out");
 		check(server.computeOnServer(s -> Bench.finish(me, s.overworld(), bench)), "could not finish with everyone out");
 		int filled = server.computeOnServer(s -> {
 			Inventory inventory = me.getInventory();

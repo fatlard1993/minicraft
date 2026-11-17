@@ -3,6 +3,7 @@ package justfatlard.minicraft;
 import justfatlard.pandorical.api.BlockRegistration;
 import justfatlard.pandorical.api.ItemRegistration;
 import justfatlard.pandorical.api.PandoricalApi;
+import net.minecraft.network.chat.Component;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
@@ -10,6 +11,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -120,16 +123,20 @@ public class Main implements ModInitializer {
 			return InteractionResult.SUCCESS;
 		});
 
-		// In the workshop the stick marks the handle, and anything that holds things stays shut:
-		// none can be loaded, but material put away in one would be material that never came back.
+		// In the workshop the stick marks the handle, and no block opens a screen: a box is for
+		// building, and a block worked there (an anvil, a crafting table, anything that holds
+		// things) would turn windows into something, at the cost of the builder's own experience,
+		// or put material away where it never comes back. Built, it is still placed and broken.
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!(level instanceof ServerLevel server) || !Workshop.isWorkshop(server) || !(player instanceof ServerPlayer builder)) return InteractionResult.PASS;
-			if (Session.of(builder) == null) return InteractionResult.PASS;
+			if (Session.of(builder) == null) return intruding(player, level) ? InteractionResult.FAIL : InteractionResult.PASS;
 			if (Visits.isMarker(player.getItemInHand(hand))) {
 				Visits.markHandle(builder, hit.getBlockPos());
 				return InteractionResult.SUCCESS;
 			}
-			if (server.getBlockEntity(hit.getBlockPos()) instanceof net.minecraft.world.Container && !player.isSecondaryUseActive()) return InteractionResult.FAIL;
+			// A sneaking click with something in hand places it rather than working the block, as in vanilla.
+			boolean placing = player.isSecondaryUseActive() && (!player.getMainHandItem().isEmpty() || !player.getOffhandItem().isEmpty());
+			if (!placing && server.getBlockState(hit.getBlockPos()).getMenuProvider(server, hit.getBlockPos()) != null) return InteractionResult.FAIL;
 			return InteractionResult.PASS;
 		});
 		ServerTickEvents.END_SERVER_TICK.register(Visits::watch);
@@ -140,6 +147,9 @@ public class Main implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(Preview::tick);
 		ServerTickEvents.END_SERVER_TICK.register(MiniatureBlockEntity::upkeep);
 		PandoricalApi.structures().drawings().register(MiniatureDrawing::draw);
+		// A builder's pack is windows onto the bench's supply, and their own things are put aside.
+		PandoricalApi.loans().register(player -> Session.of(player) == null ? null
+			: Component.translatableWithFallback("minicraft-justfatlard.on_loan", "building at a Miniature Bench"));
 		// Pandorical keeps structures in memory only: draw each miniature again as its anchor loads, and let it go as it unloads.
 		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
 			if (entity instanceof Display.BlockDisplay anchor && anchor.entityTags().contains(MiniatureBlockEntity.ANCHOR_TAG)
@@ -159,6 +169,27 @@ public class Main implements ModInitializer {
 			Session session = Session.of(after);
 			if (session != null && !Workshop.isWorkshop(after.level())) Visits.finish(after, session);
 		});
+		// Out of the workshop by any way at all (another mod's teleport, a door, a mount): the visit
+		// ends there and then, so the pack of windows never goes anywhere the windows could be kept.
+		net.fabricmc.fabric.api.entity.event.v1.ServerEntityLevelChangeEvents.AFTER_PLAYER_CHANGE_LEVEL.register((player, from, to) -> {
+			Session session = Session.of(player);
+			if (session != null && Workshop.isWorkshop(from) && !Workshop.isWorkshop(to)) Visits.finish(player, session);
+		});
+		// Nobody dies building: a death would hand the pack of windows to whatever takes a dead
+		// player's things, and lose the builder's own experience to a workshop where nothing drops.
+		ServerPlayerEvents.ALLOW_DEATH.register((player, source, amount) -> {
+			if (Session.of(player) == null || !Workshop.isWorkshop(player.level())) return true;
+			player.setHealth(player.getMaxHealth());
+			player.clearFire();
+			player.resetFallDistance();
+			Visits.leave(player);
+			Bench.say(player, "minicraft-justfatlard.saved", "You were taken out of the box before you came to harm.");
+			return false;
+		});
+		// Somebody in the workshop with no visit (brought by another mod) touches nothing on the way back out.
+		UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> intruding(player, level) ? InteractionResult.FAIL : InteractionResult.PASS);
+		AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> intruding(player, level) ? InteractionResult.FAIL : InteractionResult.PASS);
+		UseItemCallback.EVENT.register((player, level, hand) -> intruding(player, level) ? InteractionResult.FAIL : InteractionResult.PASS);
 		// Isolated in its own class and only reached from here: it names block-tip's types directly.
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("block-tip")) {
 			justfatlard.minicraft.integration.MinicraftTips.register();
@@ -168,5 +199,11 @@ public class Main implements ModInitializer {
 			ConstructScreen.forget(handler.getPlayer().getUUID());
 			Preview.forget(handler.getPlayer().getUUID());
 		});
+	}
+
+	/** In the workshop with no visit, and not an operator looking on in creative or spectator. */
+	private static boolean intruding(net.minecraft.world.entity.player.Player player, net.minecraft.world.level.Level level) {
+		return level instanceof ServerLevel server && Workshop.isWorkshop(server) && player instanceof ServerPlayer someone
+			&& Session.of(someone) == null && !someone.isCreative() && !someone.isSpectator();
 	}
 }
