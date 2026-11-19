@@ -92,6 +92,7 @@ public class Main implements ModInitializer {
 		Session.init();
 		BenchScreen.register();
 		ConstructScreen.register();
+		MiniatureChoice.register();
 
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> {
 			if (blockEntity instanceof BenchBlockEntity && Bench.occupied(level, pos)) {
@@ -197,6 +198,7 @@ public class Main implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			BenchScreen.forget(handler.getPlayer().getUUID());
 			ConstructScreen.forget(handler.getPlayer().getUUID());
+			MiniatureChoice.forget(handler.getPlayer().getUUID());
 			Preview.forget(handler.getPlayer().getUUID());
 		});
 	}

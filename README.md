@@ -21,7 +21,7 @@ Crafted from four planks, two by two, with an iron nugget and a spyglass side by
 
 **Building together**: any number of people can step in at the same bench and build in its one box at once, each with their own pack put aside and given back to each exactly. Everyone builds from what the bench holds: when one of you places the last of a material it is gone from every pack, and it is back in every pack when somebody breaks one. Two of you reaching for the last one at the same moment never both get it.
 
-- **Fine while people build**: loading more (it turns up in their packs), naming the miniature, the functional slot, and responding to redstone. Taking out what is left takes only what the bench holds; what shows in a builder's pack is only a look at the same thing, never material of its own, so it shows less afterwards, or nothing.
+- **Fine while people build**: loading more, or breaking a miniature down (either turns up in their packs), naming the miniature, the functional slot, and responding to redstone. Taking out what is left takes only what the bench holds; what shows in a builder's pack is only a look at the same thing, never material of its own, so it shows less afterwards, or nothing.
 - **Waits until everyone is out**: finishing, trying a build out, working on a miniature again, copying and choosing another size (which also waits for the box to be empty). Nobody is pulled out for it: the bench says who is still in the box.
 - **Who is in**: the bench's screen names who is building there, and a bench with anybody in its box cannot be broken. Any builder can mark or unmark the handle with their own stick, and each has the box's edges drawn for them.
 
@@ -29,7 +29,11 @@ Crafted from four planks, two by two, with an iron nugget and a spyglass side by
 
 **A handle or a block to work as, not both.** With a block in the functional slot the stick will not mark a handle, and with a handle marked the slot will not take a block; either way the bench says which is in the way and how to clear it (take the block out, or click the handle with the stick again to unmark it).
 
-**Working on one again**: right-click the bench with a miniature and it stands up in the box again, its blocks already paid for, to be changed and finished anew. Its name comes back into the bench, and the block it worked as back into the functional slot. One that still holds things (a chest's, a furnace's) is refused until it is emptied. It must match the bench's size and shape.
+**Right-click the bench with a miniature** and it asks what to do with it, listing what breaking it down would give: put it on the plate to work on again, or break it down.
+
+**Breaking one down** puts what it was built from into the bench's materials, exactly what breaking every block of it in the box would give back. A miniature cut to another size is cut again to the bench's, nothing lost: a part too fine to cut is kept aside, like a sliver after choosing another size. A bench with no size yet takes the miniature's. The block it worked as comes back to you; its name and handle go with it. One that still holds things is refused until it is emptied.
+
+**Working on one again**: put on the plate, it stands up in the box again, its blocks already paid for, to be changed and finished anew. Its name comes back into the bench, and the block it worked as back into the functional slot. One that still holds things (a chest's, a furnace's) is refused until it is emptied. It must match the bench's size and shape.
 
 **Copying one**: the bench's screen has two tabs, Build for everything above, and Copy. On Copy, put a miniature in the slot on the left, and if the bench holds enough material its copy shows in the slot on the right; take it and the material is spent, and the original stays where it was. Beside them the screen lists what the copy costs of each material against what the bench holds, and says why there is no copy when there is none.
 

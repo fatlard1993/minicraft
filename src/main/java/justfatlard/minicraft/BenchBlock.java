@@ -20,8 +20,8 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * The miniature bench. Right-click it with blocks to load them, with a miniature to work on it
- * again, or with an empty hand to open it. A block that cannot be a material but can be worked
+ * The miniature bench. Right-click it with blocks to load them, with a miniature to choose
+ * between working on it again and breaking it down, or with an empty hand to open it. A block that cannot be a material but can be worked
  * as (a furnace, a chest) goes straight into the functional slot.
  */
 public class BenchBlock extends Block implements EntityBlock {
@@ -59,7 +59,7 @@ public class BenchBlock extends Block implements EntityBlock {
 		boolean function = !miniature && !loadable && stack.getItem() instanceof BlockItem item && Functions.supported(item.getBlock());
 		if (!miniature && !loadable && !function) return InteractionResult.TRY_WITH_EMPTY_HAND;
 		if (level instanceof ServerLevel server && player instanceof ServerPlayer user) {
-			if (miniature) Bench.edit(user, server, pos, stack);
+			if (miniature) MiniatureChoice.open(user, server, pos, hand);
 			else if (function) Bench.putFunction(user, server, pos, stack);
 			else Bench.load(user, server, pos, stack);
 		}

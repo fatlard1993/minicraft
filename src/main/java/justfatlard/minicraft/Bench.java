@@ -210,6 +210,39 @@ public final class Bench {
 	}
 
 	/**
+	 * A finished miniature broken down into the bench's budget: what breaking every block of it in
+	 * the box would give back ({@link Copying#cells}), cut again to the bench's size with nothing
+	 * lost ({@link Ledger#credit}). A bench with no size yet takes the miniature's. The block it
+	 * worked as goes back to the player; its handle and name go with it.
+	 */
+	public static boolean salvage(ServerPlayer player, ServerLevel level, BlockPos pos, ItemStack stack) {
+		int plot = plotOf(level, pos);
+		Ledger ledger = Ledger.get(level.getServer());
+		Ledger.Project project = ledger.project(plot);
+		Optional<Looks> held = Looks.of(stack);
+		if (project == null || held.isEmpty()) return false;
+		if (holdsAnything(stack)) return say(player, "minicraft-justfatlard.edit.not_empty", "Empty it first.");
+		if (project.capturing()) return refuseBusy(player, project);
+		Miniature miniature = held.get().off();
+		Map<Item, Long> cells = Copying.cells(miniature);
+		Optional<Block> function = held.get().function();
+		if (cells.isEmpty() && function.isEmpty()) {
+			return say(player, "minicraft-justfatlard.salvage.nothing", "Nothing in it counts as material.");
+		}
+		if (project.n() == 0) {
+			ledger.setSize(plot, miniature.n());
+			ledger.setSlab(plot, miniature.isSlab());
+		}
+		cells.forEach((item, count) -> ledger.credit(plot, item, count, miniature.n()));
+		stack.consume(1, player);
+		function.ifPresent(block -> give(player, new ItemStack(block)));
+		level.playSound(null, pos, SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS, 1.0F, 0.8F);
+		say(player, "minicraft-justfatlard.salvage.done", "Broken down: what it was built from is in the bench.");
+		Visits.refreshBuilders(level.getServer(), plot);
+		return true;
+	}
+
+	/**
 	 * Read the box into a miniature, hand it over, and empty the box. With behaviours chosen, the
 	 * looks are captured over a few ticks and the miniature comes when they are done.
 	 */

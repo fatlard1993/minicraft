@@ -399,6 +399,35 @@ public final class Ledger extends SavedData {
 		setDirty();
 	}
 
+	/**
+	 * Give back cells cut {@code from} to a side, as this size's, losing nothing: whole cells into
+	 * the budget, and what is finer than one added to the material's sliver, carried into a whole
+	 * cell when the two make one. The same arithmetic as {@link #resize}, for one material.
+	 */
+	public void credit(int plot, Item item, long cells, int from) {
+		Project project = projects.get(plot);
+		if (project == null || project.n == 0 || cells <= 0 || from <= 0) return;
+		if (from == project.n) {
+			change(plot, item, cells);
+			return;
+		}
+		Identifier id = BuiltInRegistries.ITEM.getKey(item);
+		java.math.BigInteger toCube = java.math.BigInteger.valueOf((long) project.n * project.n * project.n);
+		java.math.BigInteger fromCube = java.math.BigInteger.valueOf((long) from * from * from);
+		Sliver sliver = project.slivers.getOrDefault(id, Sliver.NONE);
+		// in this size's cells: cells * toCube / fromCube + sliver.num * toCube / sliver.den, as num / den
+		java.math.BigInteger num = java.math.BigInteger.valueOf(cells).multiply(toCube).multiply(sliver.den())
+			.add(sliver.num().multiply(toCube).multiply(fromCube));
+		java.math.BigInteger den = fromCube.multiply(sliver.den());
+		java.math.BigInteger[] split = num.divideAndRemainder(den);
+		Sliver left = Sliver.of(split[1], den.multiply(toCube));
+		if (left.isNone()) project.slivers.remove(id);
+		else project.slivers.put(id, left);
+		long whole = split[0].longValueExact();
+		if (whole > 0) project.budget.merge(id, whole, Long::sum);
+		setDirty();
+	}
+
 	/** Add or take cells; never below nothing. */
 	public void change(int plot, Item item, long cells) {
 		Project project = projects.get(plot);
