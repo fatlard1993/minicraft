@@ -42,6 +42,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.LeverBlock;
@@ -86,6 +87,7 @@ public final class Behaviours implements FabricClientGameTest {
 			});
 
 			lamp(context, server, connection, bench, plot, origin.west(3));
+			glow(context, server, connection, bench, plot, origin.north(9));
 			relay(context, server, connection, bench, plot);
 			lever(context, server, connection, bench, plot, origin.north(3));
 			refusals(server, connection, bench, plot);
@@ -123,11 +125,32 @@ public final class Behaviours implements FabricClientGameTest {
 		context.waitTicks(2);
 		check(state(server, at).getValue(MiniatureBlock.POWERED), "the lamp did not answer the redstone");
 		check(state(server, at).getValue(MiniatureBlock.LIGHT) == 15, "the lit lamp gives no light: " + state(server, at).getValue(MiniatureBlock.LIGHT));
+		context.waitTicks(10);
+		int serverLight = server.computeOnServer(s -> s.overworld().getBrightness(LightLayer.BLOCK, at.above()));
+		int clientLight = context.computeOnClient(client -> client.level.getBrightness(LightLayer.BLOCK, at.above()));
+		check(serverLight == 14 && clientLight == 14, "the lit lamp does not light the air above it: server " + serverLight + ", client " + clientLight);
 		check(server.computeOnServer(s -> ((MiniatureBlockEntity) s.overworld().getBlockEntity(at)).miniature().at(0, 0, 0)
 			.getValue(RedstoneLampBlock.LIT)), "the lamp does not wear its lit look");
 		server.runOnServer(s -> s.overworld().setBlockAndUpdate(at.east(), Blocks.AIR.defaultBlockState()));
 		context.waitTicks(2);
 		check(!state(server, at).getValue(MiniatureBlock.POWERED) && state(server, at).getValue(MiniatureBlock.LIGHT) == 0, "the lamp did not go dark");
+	}
+
+	/** A shroomlight built in, among stone: lights the world as soon as it is placed, on the server and on the client. */
+	private static void glow(ClientGameTestContext context, TestServerContext server, TestServerConnection connection, BlockPos bench, int plot, BlockPos stand) {
+		build(server, plot, List.of(new Cell(0, 0, 0, Blocks.SHROOMLIGHT.defaultBlockState()), new Cell(1, 0, 0, Blocks.STONE.defaultBlockState()),
+			new Cell(0, 0, 1, Blocks.STONE.defaultBlockState()), new Cell(1, 0, 1, Blocks.STONE.defaultBlockState())));
+		check(server.computeOnServer(s -> Bench.finish(connection.getServerPlayer(), s.overworld(), bench)), "could not start finishing the shroomlight");
+		context.waitTicks(30);
+		BlockPos at = placeByHand(context, server, connection, taken(server, connection).toItem(), stand);
+		check(state(server, at).getValue(MiniatureBlock.LIGHT) == 15, "the shroomlight gives no light: " + state(server, at).getValue(MiniatureBlock.LIGHT));
+		context.waitTicks(10);
+		int serverLight = server.computeOnServer(s -> s.overworld().getBrightness(LightLayer.BLOCK, at.above()));
+		int clientLight = context.computeOnClient(client -> client.level.getBrightness(LightLayer.BLOCK, at.above()));
+		int clientState = context.computeOnClient(client -> client.level.getBlockState(at).getLightEmission());
+		check(clientState == 15, "the client takes the shroomlight miniature for a block giving " + clientState + " light");
+		check(serverLight == 14 && clientLight == 14, "the shroomlight does not light the air above it: server " + serverLight
+			+ ", client " + clientLight + ", client emission " + clientState);
 	}
 
 	/**
@@ -573,7 +596,7 @@ public final class Behaviours implements FabricClientGameTest {
 			ServerPlayer player = connection.getServerPlayer();
 			player.getInventory().clearContent();
 			player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.OAK_PLANKS, 2));
-			Bench.load(player, s.overworld(), bench, player.getMainHandItem());
+			while (!player.getMainHandItem().isEmpty() && Bench.load(player, s.overworld(), bench, player.getMainHandItem())) {}
 			player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.OAK_DOOR, 1));
 			Bench.load(player, s.overworld(), bench, player.getMainHandItem());
 			Bench.name(s.overworld(), bench, "The Shed");
@@ -1323,6 +1346,31 @@ public final class Behaviours implements FabricClientGameTest {
 		});
 		BlockPos at = stand.above();
 		check(server.computeOnServer(s -> s.overworld().getBlockState(at).is(Main.MINIATURE)), "the miniature was not placed");
+		return at;
+	}
+
+	/** Placed as a player places it: aimed at the top of the stand from beside it and the use key pressed, so the client predicts it first. */
+	private static BlockPos placeByHand(ClientGameTestContext context, TestServerContext server, TestServerConnection connection, ItemStack item, BlockPos stand) {
+		Vec3 was = server.computeOnServer(s -> connection.getServerPlayer().position());
+		float[] looked = server.computeOnServer(s -> new float[] {connection.getServerPlayer().getYRot(), connection.getServerPlayer().getXRot()});
+		server.runOnServer(s -> {
+			s.overworld().setBlockAndUpdate(stand, Blocks.STONE.defaultBlockState());
+			s.overworld().setBlockAndUpdate(stand.above(), Blocks.AIR.defaultBlockState());
+			ServerPlayer player = connection.getServerPlayer();
+			player.setItemInHand(InteractionHand.MAIN_HAND, item);
+			Vec3 feet = Vec3.atBottomCenterOf(stand.south(2));
+			Vec3 aim = Vec3.atCenterOf(stand).add(0, 0.5, 0).subtract(feet.add(0, player.getEyeHeight(), 0));
+			float yaw = (float) Math.toDegrees(Math.atan2(-aim.x, aim.z));
+			float pitch = (float) -Math.toDegrees(Math.atan2(aim.y, Math.sqrt(aim.x * aim.x + aim.z * aim.z)));
+			player.teleportTo(s.overworld(), feet.x, feet.y, feet.z, java.util.Set.of(), yaw, pitch, true);
+		});
+		context.waitTicks(5);
+		context.getInput().pressKey(options -> options.keyUse);
+		context.waitTicks(5);
+		BlockPos at = stand.above();
+		check(server.computeOnServer(s -> s.overworld().getBlockState(at).is(Main.MINIATURE)), "the miniature was not placed by hand");
+		server.runOnServer(s -> connection.getServerPlayer().teleportTo(s.overworld(), was.x, was.y, was.z, java.util.Set.of(), looked[0], looked[1], true));
+		context.waitTicks(3);
 		return at;
 	}
 

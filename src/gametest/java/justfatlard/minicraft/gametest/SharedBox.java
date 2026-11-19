@@ -110,7 +110,7 @@ public final class SharedBox implements FabricClientGameTest {
 		ServerPlayer me = server.computeOnServer(s -> connection.getServerPlayer());
 		server.runOnServer(s -> Ledger.get(s).setSize(plot, N));
 		hold(server, me, new ItemStack(Items.STONE, 2));
-		server.runOnServer(s -> Bench.load(me, s.overworld(), bench, me.getMainHandItem()));
+		server.runOnServer(s -> { while (!me.getMainHandItem().isEmpty() && Bench.load(me, s.overworld(), bench, me.getMainHandItem())) {} });
 		check(cells(server, plot, Items.STONE) == 2 * PER_BLOCK, "two stone did not load as " + 2 * PER_BLOCK + " cells");
 
 		// Each with their own pack, which comes back to each exactly.
@@ -209,7 +209,7 @@ public final class SharedBox implements FabricClientGameTest {
 
 		// Loaded from outside while they build: both windows pick it up. Withdrawn: only what the ledger holds comes out.
 		hold(server, passerby, new ItemStack(Items.STONE, 2));
-		server.runOnServer(s -> Bench.load(passerby, s.overworld(), bench, passerby.getMainHandItem()));
+		server.runOnServer(s -> { while (!passerby.getMainHandItem().isEmpty() && Bench.load(passerby, s.overworld(), bench, passerby.getMainHandItem())) {} });
 		check(windowOf(server, sam, Items.STONE) == 64 && windowOf(server, me, Items.STONE) == 64,
 			"the stone loaded from outside did not reach both windows");
 		server.runOnServer(s -> passerby.getInventory().clearContent());
@@ -305,7 +305,7 @@ public final class SharedBox implements FabricClientGameTest {
 		});
 		// Three stone at 4, cut to 8: exactly three blocks' worth, and three stone out again.
 		hold(server, passerby, new ItemStack(Items.STONE, 3));
-		server.runOnServer(s -> Bench.load(passerby, s.overworld(), bench, passerby.getMainHandItem()));
+		server.runOnServer(s -> { while (!passerby.getMainHandItem().isEmpty() && Bench.load(passerby, s.overworld(), bench, passerby.getMainHandItem())) {} });
 		check(cells(server, plot, Items.STONE) == 3 * 64, "three stone did not load at 4");
 		check(server.computeOnServer(s -> Bench.changeSize(passerby, s.overworld(), bench, 8)), "could not change 4 to 8");
 		check(server.computeOnServer(s -> Ledger.get(s).project(plot).n()) == 8 && cells(server, plot, Items.STONE) == 3 * 512,

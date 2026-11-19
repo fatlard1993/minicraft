@@ -18,6 +18,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,12 +42,23 @@ public final class Bench {
 	/**
 	 * Whether this can be loaded: a block, and not one that holds anything (a shulker box full of
 	 * diamonds is the obvious way to smuggle). A chest or a furnace goes in the functional slot
-	 * instead, and the miniature works as it.
+	 * instead, and the miniature works as it. Whether it can stand in the box is asked as it is
+	 * loaded, of what that bench holds.
 	 */
 	public static boolean loadable(ItemStack stack) {
 		if (!(stack.getItem() instanceof BlockItem item)) return false;
 		if (stack.is(REFUSED)) return false;
 		return !(item.getBlock() instanceof EntityBlock);
+	}
+
+	/** Whether this block could stand in the plot's box: on its floor, or on, under or beside something loaded. */
+	static boolean standsIn(ServerLevel level, Ledger.Project project, Block block) {
+		List<BlockState> around = new ArrayList<>();
+		around.add(Workshop.FOOTPRINT);
+		for (Item material : project.materials()) {
+			if (material instanceof BlockItem loaded) around.add(loaded.getBlock().defaultBlockState());
+		}
+		return Footing.stands(Workshop.level(level.getServer()), block, around);
 	}
 
 	/** A name as typed, made fit for a miniature: no formatting codes, no edges of space, an anvil's length at most. */
@@ -115,66 +127,69 @@ public final class Bench {
 		return level.getBlockEntity(pos) instanceof BenchBlockEntity bench ? bench.plot() : -1;
 	}
 
-	/** Load the whole stack held: N³ cells a block. */
-	public static void load(ServerPlayer player, ServerLevel level, BlockPos pos, ItemStack stack) {
+	/** Load one of what is held: N³ cells. Returns whether it went in. */
+	public static boolean load(ServerPlayer player, ServerLevel level, BlockPos pos, ItemStack stack) {
 		int plot = plotOf(level, pos);
 		Ledger ledger = Ledger.get(level.getServer());
 		Ledger.Project project = ledger.project(plot);
-		if (project == null) return;
+		if (project == null) return false;
 		if (project.n() == 0) {
 			say(player, "minicraft-justfatlard.load.no_size", "Choose how finely to cut first.");
 			BenchScreen.open(player, level, pos);
-			return;
+			return false;
 		}
 		if (!loadable(stack)) {
 			say(player, "minicraft-justfatlard.load.refused", "That cannot go into a miniature.");
-			return;
+			return false;
 		}
 		BlockItem item = (BlockItem) stack.getItem();
-		int count = stack.getCount();
-		ledger.load(plot, item, count);
-		stack.consume(count, player);
+		if (!standsIn(level, project, item.getBlock())) {
+			say(player, "minicraft-justfatlard.load.no_footing", "Nothing loaded can hold that up: load what it stands on first.");
+			return false;
+		}
+		ledger.load(plot, item, 1);
+		stack.consume(1, player);
 		level.playSound(null, pos, SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS, 1.0F, 0.8F);
 		player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.load.done",
-			"%s %s in: %s cells", count, item.getName(new ItemStack(item)), project.cells(item)));
+			"%s in: %s cells", item.getName(new ItemStack(item)), project.cells(item)));
 		Visits.refreshBuilders(level.getServer(), plot);
+		return true;
 	}
 
 	/** A finished miniature back into the bench, to be built on again: stood up in the box, its cells already paid for. */
-	public static void edit(ServerPlayer player, ServerLevel level, BlockPos pos, ItemStack stack) {
+	public static boolean edit(ServerPlayer player, ServerLevel level, BlockPos pos, ItemStack stack) {
 		int plot = plotOf(level, pos);
 		Ledger ledger = Ledger.get(level.getServer());
 		Ledger.Project project = ledger.project(plot);
 		ServerLevel workshop = Workshop.level(level.getServer());
 		Optional<Looks> held = Looks.of(stack);
-		if (project == null || workshop == null || held.isEmpty()) return;
+		if (project == null || workshop == null || held.isEmpty()) return false;
 		Miniature miniature = held.get().off();
 		if (holdsAnything(stack)) {
 			say(player, "minicraft-justfatlard.edit.not_empty", "Empty it first.");
-			return;
+			return false;
 		}
 		Optional<Block> function = held.get().function();
 		if (function.isPresent() && !project.function().isEmpty()) {
 			say(player, "minicraft-justfatlard.edit.function_full", "Take the block out of the functional slot first.");
-			return;
+			return false;
 		}
 		if (project.busy()) {
-			refuseBusy(player, project);
-			return;
+			return refuseBusy(player, project);
 		}
 		if (project.n() != 0 && project.n() != miniature.n()) {
 			player.sendOverlayMessage(Component.translatableWithFallback("minicraft-justfatlard.edit.size",
 				"That miniature is cut %s to a side; this bench cuts %s.", miniature.n(), project.n()));
-			return;
+			return false;
 		}
 		if (project.n() != 0 && project.slab() != miniature.isSlab()) {
 			say(player, miniature.isSlab() ? "minicraft-justfatlard.edit.slab" : "minicraft-justfatlard.edit.block",
 				miniature.isSlab() ? "That miniature is a slab; this bench makes blocks." : "That miniature is a block; this bench makes slabs.");
-			return;
+			return false;
 		}
 		if (!boxEmpty(workshop, plot, miniature.n(), miniature.n())) {
 			say(player, "minicraft-justfatlard.edit.full", "Finish what is on this bench first.");
-			return;
+			return false;
 		}
 		if (project.n() == 0) {
 			ledger.setSize(plot, miniature.n());
@@ -191,6 +206,7 @@ public final class Bench {
 		stack.consume(1, player);
 		level.playSound(null, pos, SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS, 1.0F, 1.2F);
 		say(player, "minicraft-justfatlard.edit.done", "On the bench to be worked on. Step in to change it.");
+		return true;
 	}
 
 	/**

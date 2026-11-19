@@ -50,7 +50,7 @@ public final class StaysInTheBox implements FabricClientGameTest {
 				ServerPlayer me = connection.getServerPlayer();
 				me.getInventory().clearContent();
 				me.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.STONE, 8));
-				Bench.load(me, s.overworld(), bench, me.getMainHandItem());
+				while (!me.getMainHandItem().isEmpty() && Bench.load(me, s.overworld(), bench, me.getMainHandItem())) {}
 				me.getInventory().setItem(3, new ItemStack(Items.DIAMOND, 2));
 				return made;
 			});

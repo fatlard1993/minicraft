@@ -24,6 +24,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -63,9 +64,16 @@ public final class BenchLoop implements FabricClientGameTest {
 			server.runOnServer(s -> Ledger.get(s).setSize(plot, N));
 			hold(server, connection, new ItemStack(Items.OAK_PLANKS, 3));
 			server.runOnServer(s -> Bench.load(connection.getServerPlayer(), s.overworld(), bench, connection.getServerPlayer().getMainHandItem()));
+			check(cells(server, plot) == PER_BLOCK, "one click did not load one plank: " + cells(server, plot) + " cells");
+			check(server.computeOnServer(s -> connection.getServerPlayer().getMainHandItem().getCount()) == 2, "one click spent more than one plank");
+			server.runOnServer(s -> {
+				ServerPlayer player = connection.getServerPlayer();
+				while (!player.getMainHandItem().isEmpty() && Bench.load(player, s.overworld(), bench, player.getMainHandItem())) {}
+			});
 			check(cells(server, plot) == 3 * PER_BLOCK, "three planks did not load as " + 3 * PER_BLOCK + " cells: " + cells(server, plot));
 			check(server.computeOnServer(s -> connection.getServerPlayer().getMainHandItem().isEmpty()), "the loaded planks were not spent");
 			check(!Bench.loadable(new ItemStack(Items.SHULKER_BOX)), "a shulker box was loadable");
+			footing(server, connection, bench, plot);
 
 			// In: the pack put aside, the materials handed over, flight allowed.
 			server.runOnServer(s -> {
@@ -348,6 +356,41 @@ public final class BenchLoop implements FabricClientGameTest {
 	private static int figures(TestServerContext server, BlockPos pos) {
 		return server.computeOnServer(s -> s.overworld().getEntitiesOfClass(Display.BlockDisplay.class, new AABB(pos).inflate(0.1),
 			d -> d.entityTags().contains(MiniatureBlockEntity.FIGURE_TAG) && !d.isRemoved()).size());
+	}
+
+	/**
+	 * Only what can stand in the box goes in: on its floor, or on something loaded. A torch on the
+	 * floor at once; seeds and a sapling once what they grow in is loaded; kelp never, with no water.
+	 * Everything loaded here is taken back out after.
+	 */
+	private static void footing(TestServerContext server, TestServerConnection connection, BlockPos bench, int plot) {
+		check(loads(server, connection, bench, plot, Items.TORCH), "a torch would not load, and stands on the floor");
+		check(!loads(server, connection, bench, plot, Items.WHEAT_SEEDS), "seeds loaded with no farmland to plant them in");
+		check(!loads(server, connection, bench, plot, Items.OAK_SAPLING), "a sapling loaded with no dirt to plant it in");
+		check(!loads(server, connection, bench, plot, Items.KELP), "kelp loaded, and the box has no water");
+		check(!loads(server, connection, bench, plot, Items.SUGAR_CANE), "sugar cane loaded, and the box has no water");
+		check(loads(server, connection, bench, plot, Items.FARMLAND), "farmland would not load");
+		check(loads(server, connection, bench, plot, Items.WHEAT_SEEDS), "seeds would not load with farmland loaded");
+		check(loads(server, connection, bench, plot, Items.DIRT), "dirt would not load");
+		check(loads(server, connection, bench, plot, Items.OAK_SAPLING), "a sapling would not load with dirt loaded");
+		check(!loads(server, connection, bench, plot, Items.KELP), "kelp loaded once dirt was in");
+		server.runOnServer(s -> {
+			Ledger ledger = Ledger.get(s);
+			for (Item item : List.of(Items.TORCH, Items.FARMLAND, Items.WHEAT_SEEDS, Items.DIRT, Items.OAK_SAPLING)) {
+				ledger.change(plot, item, -ledger.project(plot).cells(item));
+			}
+		});
+	}
+
+	/** One of this, loaded from the hand, and whether it went in; the hand left empty either way. */
+	private static boolean loads(TestServerContext server, TestServerConnection connection, BlockPos bench, int plot, Item item) {
+		return server.computeOnServer(s -> {
+			ServerPlayer player = connection.getServerPlayer();
+			player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item));
+			boolean in = Bench.load(player, s.overworld(), bench, player.getMainHandItem());
+			player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+			return in;
+		});
 	}
 
 	private static void check(boolean holds, String otherwise) {
