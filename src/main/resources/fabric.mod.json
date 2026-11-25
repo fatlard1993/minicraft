@@ -16,6 +16,9 @@
   "entrypoints": {
     "main": [
       "justfatlard.minicraft.Main"
+    ],
+    "pvp-dimensions-demo": [
+      "justfatlard.minicraft.integration.MinicraftDemo"
     ]
   },
   "mixins": [
@@ -26,10 +29,11 @@
     "fabric-api": "${fabricApiVersion}",
     "minecraft": "${minecraftDependency}",
     "java": ">=25",
-    "pandorical": ">=15.35.0"
+    "pandorical": ">=15.39.0"
   },
   "suggests": {
-    "block-tip": "*"
+    "block-tip": "*",
+    "pvp-dimensions-justfatlard": ">=1.13.0"
   },
   "custom": {
     "modmenu": {

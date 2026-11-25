@@ -12,6 +12,14 @@ base {
 repositories {
 }
 
+// PvP Dimensions, which the demo's hook compiles against and the game tests load.
+def pvpDimensionsProps = new Properties()
+file("../pvp-dimensions/gradle.properties").withInputStream { pvpDimensionsProps.load(it) }
+def pvpDimensionsJar = file("../pvp-dimensions/build/libs/${pvpDimensionsProps.getProperty("mod_id")}-${pvpDimensionsProps.getProperty("mod_version")}.jar")
+if (!pvpDimensionsJar.exists()) {
+	throw new GradleException("pvp-dimensions ${pvpDimensionsProps.getProperty("mod_version")} is not built. Run ./gradlew build in ../pvp-dimensions first: this mod compiles against its API.")
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -33,6 +41,9 @@ dependencies {
 		}
 		compileOnly files(blockTipJar)
 	}
+
+	// Optional: the PvP Dimensions demo's hook compiles against its API, never bundled.
+	compileOnly files(pvpDimensionsJar)
 }
 
 // Fabric tests these predicates against the loader's *normalized* game version,
@@ -85,3 +96,9 @@ jar {
 
 // Smoke and full gametests, configured once for the whole suite in Pandorical.
 apply from: file("../pandorical/gametest.gradle")
+
+// The game tests step into the workshop from a PvP Dimensions demo, so they load it.
+dependencies {
+	gametestCompileOnly files(pvpDimensionsJar)
+	gametestRuntimeOnly files(pvpDimensionsJar)
+}

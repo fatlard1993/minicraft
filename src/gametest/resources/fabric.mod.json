@@ -14,7 +14,8 @@
 			"justfatlard.minicraft.gametest.SharedBox",
 			"justfatlard.minicraft.gametest.StaysInTheBox",
 			"justfatlard.minicraft.gametest.BreakingDown",
-			"justfatlard.minicraft.gametest.LitOnAServer"
+			"justfatlard.minicraft.gametest.LitOnAServer",
+			"justfatlard.minicraft.gametest.FromADemo"
 		]
 	},
 	"depends": {

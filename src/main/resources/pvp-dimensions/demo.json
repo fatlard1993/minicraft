@@ -1,0 +1,46 @@
+{
+  "demo": {
+    "name": "Minicraft",
+    "icon": "minicraft-justfatlard:bench",
+    "about": [
+      "A Miniature Bench turns a full-size build into one block. Place a bench, right-click it and choose a size (4 is quick), then right-click it holding blocks to load them, one a click.",
+      "Step in and build at full size in the workshop with what you loaded, come back with the eye of ender, and Finish: the miniature is yours. Sneak and right-click a placed one with an empty hand to build it full size."
+    ],
+    "finish": true
+  },
+  "pvp_preset": 1,
+  "needs": ["minicraft-justfatlard"],
+  "preset": {
+    "name": "Minicraft",
+    "icon": "minicraft-justfatlard:bench",
+    "pvp": false,
+    "game_mode": "survival",
+    "entry_kit": [
+      {"slot": 0, "item": {"id": "minicraft-justfatlard:bench", "count": 2}},
+      {"slot": 1, "item": {"id": "minecraft:oak_planks", "count": 64}},
+      {"slot": 2, "item": {"id": "minecraft:cobblestone", "count": 64}},
+      {"slot": 3, "item": {"id": "minecraft:glass", "count": 32}},
+      {"slot": 4, "item": {"id": "minecraft:oak_stairs", "count": 32}},
+      {"slot": 5, "item": {"id": "minecraft:oak_door", "count": 4}},
+      {"slot": 6, "item": {"id": "minecraft:torch", "count": 16}},
+      {"slot": 7, "item": {"id": "minecraft:redstone_lamp", "count": 4}},
+      {"slot": 8, "item": {"id": "minecraft:cooked_beef", "count": 8}},
+      {"slot": 9, "item": {"id": "minecraft:oak_log", "count": 16}},
+      {"slot": 10, "item": {"id": "minecraft:oak_fence", "count": 16}},
+      {"slot": 11, "item": {"id": "minecraft:lever", "count": 4}},
+      {"slot": 12, "item": {"id": "minecraft:poppy", "count": 8}},
+      {"slot": 13, "item": {"id": "minecraft:dirt", "count": 16}},
+      {"slot": 14, "item": {"id": "minecraft:crafting_table", "count": 2}},
+      {"slot": 15, "item": {"id": "minecraft:chest", "count": 2}}
+    ],
+    "respawn_kit": "entry",
+    "goal": "time",
+    "mobs": "off",
+    "life": 20,
+    "size": 2,
+    "world": "overworld",
+    "shape": "flat",
+    "biome": "minecraft:plains",
+    "weather": "clear"
+  }
+}

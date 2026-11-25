@@ -85,7 +85,11 @@ Sneak and right-click a placed miniature with an empty hand. A dialog lists what
 - **TNT** cannot be loaded.
 - **Only what can stand in the box** loads: on its floor, or on, under or beside something already loaded. Seeds wait for farmland and a sapling for dirt, so load what it stands on first. The box never has water, so kelp, seagrass and sugar cane never go in.
 - **Nothing in the workshop moves material on its own.** Nothing ever drops there, nothing grows or melts, and the box's floor cannot be broken.
-- **No stepping in from a PvP Dimensions arena or the Learning Blocks classroom.** Each of those keeps your own things aside the way the workshop does, and the two would hand back each other's. A bench there says "Not from here: leave this world first"; step out to the ordinary world and the bench takes you in.
+- **No stepping in from a PvP Dimensions game or the Learning Blocks classroom.** Each of those keeps your own things aside the way the workshop does, and the two would hand back each other's. A bench there says "Not from here: leave this world first"; step out to the ordinary world and the bench takes you in. A PvP Dimensions demo is the exception (below).
+
+## Demo
+
+With [PvP Dimensions](https://github.com/fatlard1993/pvp-dimensions) 1.13 or later on the server, Minicraft has a demo: a flat field and a kit with two benches and blocks to build with. From the demo, a bench takes you into the workshop as it would anywhere else. The demo waits while you build, and the eye of ender brings you back to it holding the demo's kit. If the demo ends while you are in the box, you are brought out first, and only your own things come home. It counts as played once you hold a miniature you made there. Benches left in it are cleared away with it, along with whatever was loaded or built at them.
 
 ## Known Limits
 
@@ -106,7 +110,7 @@ Sneak and right-click a placed miniature with an empty hand. A dialog lists what
 
 ## Players Without A Mod
 
-**Pandorical is required on the server and on every player's client**, version 15.35 or later. A Pandorical client draws a miniature as one object at its true scale and stands on its exact shape, and a slab miniature at its half; carried, its item shows its own build. A Pandorical client older than 15.30 shows every miniature item as the same little cottage. A client without Pandorical sees a placed miniature drawn with block displays and collides with a full block.
+**Pandorical is required on the server and on every player's client**, version 15.39 or later. A Pandorical client draws a miniature as one object at its true scale and stands on its exact shape, and a slab miniature at its half; carried, its item shows its own build. A Pandorical client older than 15.30 shows every miniature item as the same little cottage. A client without Pandorical sees a placed miniature drawn with block displays and collides with a full block.
 
 ## Block Tip
 

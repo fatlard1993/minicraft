@@ -151,6 +151,18 @@ public class Main implements ModInitializer {
 		// A builder's pack is windows onto the bench's supply, and their own things are put aside.
 		PandoricalApi.loans().register(player -> Session.of(player) == null ? null
 			: Component.translatableWithFallback("minicraft-justfatlard.on_loan", "building at a Miniature Bench"));
+		// Stepped in from a world that waits for them (a PvP Dimensions demo), and sent back when it ends.
+		PandoricalApi.sideTrips().host(new justfatlard.pandorical.api.SideTripApi.Host() {
+			@Override
+			public boolean holds(ServerPlayer player) {
+				return Session.of(player) != null;
+			}
+
+			@Override
+			public void sendBack(ServerPlayer player) {
+				Visits.leave(player);
+			}
+		});
 		// Pandorical keeps structures in memory only: draw each miniature again as its anchor loads, and let it go as it unloads.
 		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
 			if (entity instanceof Display.BlockDisplay anchor && anchor.entityTags().contains(MiniatureBlockEntity.ANCHOR_TAG)

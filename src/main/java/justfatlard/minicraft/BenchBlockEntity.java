@@ -24,6 +24,14 @@ public class BenchBlockEntity extends BlockEntity {
 		return plot;
 	}
 
+	/** Gone with its world rather than broken: its plot given back with nothing handed out, and never this bench's again. */
+	public void forget() {
+		if (plot < 0 || !(level instanceof ServerLevel server)) return;
+		Bench.forget(server.getServer(), plot);
+		plot = -1;
+		setChanged();
+	}
+
 	@Override
 	public void preRemoveSideEffects(BlockPos pos, BlockState state) {
 		super.preRemoveSideEffects(pos, state);

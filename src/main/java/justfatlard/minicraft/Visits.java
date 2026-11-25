@@ -72,9 +72,10 @@ public final class Visits {
 
 	/**
 	 * Worlds whose mod holds the player's own things the way the workshop does: a PvP Dimensions arena,
-	 * the Learning Blocks classroom. Stepping in from one would put that mod's pack aside here as theirs,
-	 * while crossing out of its world made it hand the real one back in the workshop; coming back, the
-	 * other mod's pack would come home as theirs. So the bench there takes nobody in.
+	 * the Learning Blocks classroom. Stepping in from one puts that mod's pack aside here, so it may
+	 * only be done where that mod lets it as a side trip: it waits for them rather than handing their
+	 * real pack back in the workshop, and calls them back before it ends. A PvP Dimensions demo lets
+	 * it; anywhere else there, the bench takes nobody in.
 	 */
 	private static final java.util.Set<String> HELD_ELSEWHERE = java.util.Set.of("pvp-dimensions-justfatlard", "learning-blocks-justfatlard");
 
@@ -87,7 +88,8 @@ public final class Visits {
 		if (project == null || workshop == null || player.isSpectator()) return false;
 		if (project.n() == 0) return tell(player, "minicraft-justfatlard.enter.no_size", "Choose a size first.");
 		if (Session.of(player) != null) return tell(player, "minicraft-justfatlard.enter.already", "You are already in a workshop.");
-		if (HELD_ELSEWHERE.contains(player.level().dimension().identifier().getNamespace())) {
+		if (HELD_ELSEWHERE.contains(player.level().dimension().identifier().getNamespace())
+				&& !justfatlard.pandorical.api.PandoricalApi.sideTrips().mayStepAside(player)) {
 			return tell(player, "minicraft-justfatlard.enter.held", "Not from here: leave this world first.");
 		}
 		if (project.capturing()) {

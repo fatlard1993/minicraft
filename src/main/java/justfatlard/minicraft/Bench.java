@@ -424,6 +424,16 @@ public final class Bench {
 		ledger.close(plot);
 	}
 
+	/** A plot whose bench went with its world (a demo closing): its box emptied and the plot given back, nothing handed out. */
+	static void forget(net.minecraft.server.MinecraftServer server, int plot) {
+		Ledger ledger = Ledger.get(server);
+		Ledger.Project project = ledger.project(plot);
+		if (project == null) return;
+		ServerLevel workshop = Workshop.level(server);
+		if (project.n() > 0 && workshop != null) Workshop.clear(workshop, plot, project.n());
+		ledger.close(plot);
+	}
+
 	public static boolean occupied(Level level, BlockPos pos) {
 		if (!(level instanceof ServerLevel server)) return false;
 		Ledger.Project project = Ledger.get(server.getServer()).project(plotOf(level, pos));
